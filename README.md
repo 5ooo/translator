@@ -46,6 +46,8 @@ printf 'Hello world.' | ts
 
 ### 切换模型
 
+翻译效果优先选择 PLaMo；响应速度优先选择 Argos。
+
 ```bash
 ts --models            # 查看模型
 ts --set-model plamo   # 使用 PLaMo
@@ -54,7 +56,17 @@ ts --set-model argos   # 使用 Argos
 
 ## 安装
 
-安装 uv 后，在项目目录运行：
+收到离线包后，解压并在目录内运行：
+
+```bash
+./install.sh --offline
+export PATH="$HOME/.local/bin:$PATH"
+ts --models
+```
+
+离线包包含两个模型和运行依赖，无需联网或安装 uv。当前构建平台为 Ubuntu 24.04 x86-64，其他系统的兼容性尚未验证。
+
+从源码安装时，先安装 uv，再在项目目录运行：
 
 ```bash
 ./install.sh

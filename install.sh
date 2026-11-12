@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 project_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ $# -gt 0 ]]; then
+    if [[ $# -ne 1 || "$1" != '--offline' ]]; then
+        printf '用法：%s [--offline]\n' "$0" >&2
+        exit 2
+    fi
+    "$project_dir/bin/ts" --check --model argos
+    "$project_dir/bin/ts" --check --model plamo
+    "$project_dir/bin/python" "$project_dir/scripts/provision.py" --link-only
+    printf '\n离线安装完成。\n'
+    exit 0
+fi
 if ! command -v uv >/dev/null 2>&1; then
     printf '缺少 uv，请先安装 uv 后重试。\n' >&2
     exit 1

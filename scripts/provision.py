@@ -1,3 +1,4 @@
+import argparse
 import hashlib
 import json
 import os
@@ -110,7 +111,13 @@ def main():
 
 if __name__ == '__main__':
     try:
-        main()
+        parser = argparse.ArgumentParser(description='准备 ts 运行环境')
+        parser.add_argument('--link-only', action='store_true', help='仅安装命令链接')
+        args = parser.parse_args()
+        if args.link_only:
+            install_command()
+        else:
+            main()
     except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f'环境安装失败：{exc}', file=sys.stderr)
         raise SystemExit(1)

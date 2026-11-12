@@ -7,7 +7,13 @@ name = "ts-offline"
 version = "0.1.0"
 description = "离线终端中英翻译与图片 OCR"
 requires-python = ">=3.10"
-dependencies = ["argostranslate==1.9.6", "langid==1.1.6", "Pillow>=10,<13", "rich==14.1.0"]
+dependencies = [
+    "argostranslate==1.9.6",
+    "ctranslate2>=4.0,<5",
+    "langid==1.1.6",
+    "Pillow>=10,<13",
+    "rich==14.1.0",
+]
 
 [project.optional-dependencies]
 test = ["pytest>=7,<10"]

@@ -14,4 +14,4 @@ if [[ -d "$project_dir/.runtime/system/usr/share/tesseract-ocr/5/tessdata" ]]; t
 fi
 export TS_REQUIRE_INTEGRATION=1
 export PYTHONDONTWRITEBYTECODE=1
-"$project_dir/.venv-uv/bin/python" -m pytest "$project_dir/tests" -p no:cacheprovider "$@"
+"$project_dir/bin/python" -m pytest "$project_dir/tests" -p no:cacheprovider "$@"

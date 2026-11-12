@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+launcher="$(readlink -f -- "${BASH_SOURCE[0]}")"
+project_dir="$(cd -- "$(dirname -- "$launcher")/.." && pwd)"
+python="$project_dir/.venv-uv/bin/python"
+if [[ ! -x "$python" ]]; then
+    printf 'ts：Python 环境尚未安装，请运行 %s/install.sh\n' "$project_dir" >&2
+    exit 1
+fi
+resolved_python="$(readlink -f -- "$python")"
+case "$resolved_python" in
+    "$project_dir"/.runtime/python/*/bin/*)
+        export PYTHONHOME="${resolved_python%/bin/*}"
+        ;;
+esac
+export PYTHONPATH="$project_dir/src${PYTHONPATH:+:$PYTHONPATH}"
+exec "$python" "$@"
