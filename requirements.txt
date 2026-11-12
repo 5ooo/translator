@@ -1,0 +1,5 @@
+# 直接部署请运行 ./install.sh，它使用 uv 和 requirements.lock。
+argostranslate==1.9.6
+langid==1.1.6
+Pillow>=10,<13
+rich==14.1.0
