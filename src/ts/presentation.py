@@ -45,6 +45,15 @@ class Presenter:
             self.status.update(Text(LABELS[stage], style='dim'))
             self.status.start()
 
+    def model_option(self, title: str, *, selected: bool, available: bool) -> None:
+        prefix = '* ' if selected else '  '
+        suffix = '' if available else '（不可用）'
+        line = prefix + title + suffix
+        if selected and self.styled:
+            self.console.print(Text(line, style='cyan'))
+        else:
+            self.stdout.write(line + '\n')
+
     def result(self, source: InputResult, translated: str) -> None:
         self.stop()
         if not self.styled:

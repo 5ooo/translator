@@ -1,5 +1,6 @@
 import io
 import json
+import re
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -46,13 +47,49 @@ def test_models_and_set_model_do_not_read_clipboard_or_create_config(monkeypatch
     monkeypatch.setattr(cli, 'available', lambda name: (name != 'plamo', 'ready' if name != 'plamo' else '缺少模型文件'))
     assert cli.main(['--models']) == 0
     output = capsys.readouterr().out
-    assert output == 'argos  可用（默认）\nplamo  不可用\n'
+    assert output == '* 速度优先\n  效果优先（不可用）\n'
     assert not models.config_path().exists()
 
     monkeypatch.setattr(models, 'available', lambda name: (True, 'ready'))
     assert cli.main(['--set-model', 'plamo']) == 0
-    assert 'plamo' in capsys.readouterr().out
+    assert capsys.readouterr().out == '当前模式已设为效果优先。\n'
     assert models.default_model() == 'plamo'
+    monkeypatch.setattr(cli, 'available', lambda name: (True, 'ready'))
+    assert cli.main(['--models']) == 0
+    assert capsys.readouterr().out == '  速度优先\n* 效果优先\n'
+
+
+@pytest.mark.parametrize('selected', ['argos', 'plamo'])
+@pytest.mark.parametrize('mode', ['terminal', 'pipe', 'no-color', 'dumb', 'unknown', 'plain'])
+def test_models_marks_and_colors_current_mode(selected, mode, monkeypatch):
+    class Tty(io.StringIO):
+        def isatty(self):
+            return True
+
+    stdout = io.StringIO() if mode == 'pipe' else Tty()
+    monkeypatch.setattr(cli.sys, 'stdout', stdout)
+    monkeypatch.setattr(cli.sys, 'stderr', io.StringIO())
+    monkeypatch.setattr(cli, 'default_model', lambda: selected)
+    monkeypatch.setattr(cli, 'available', lambda name: (True, 'ready'))
+    monkeypatch.setenv('TERM', mode if mode in ('dumb', 'unknown') else 'xterm-256color')
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    if mode == 'no-color':
+        monkeypatch.setenv('NO_COLOR', '')
+    args = ['--models', '--plain'] if mode == 'plain' else ['--models']
+    assert cli.main(args) == 0
+    output = stdout.getvalue()
+    plain = re.sub(r'\x1b\[[0-9;]*m', '', output)
+    if selected == 'argos':
+        assert plain == '* 速度优先\n  效果优先\n'
+        selected_line, other_line = output.splitlines()
+    else:
+        assert plain == '  速度优先\n* 效果优先\n'
+        other_line, selected_line = output.splitlines()
+    if mode == 'terminal':
+        assert '\x1b[' in selected_line
+        assert '\x1b[' not in other_line
+    else:
+        assert output == plain
 
 
 def test_saved_model_and_one_shot_override(fake_translation, monkeypatch, capsys):
@@ -75,7 +112,7 @@ def test_default_model_can_be_changed_back(monkeypatch, capsys):
     assert cli.main(['--set-model', 'plamo']) == 0
     assert cli.main(['--set-model', 'argos']) == 0
     assert models.default_model() == 'argos'
-    assert 'argos' in capsys.readouterr().out
+    assert capsys.readouterr().out.endswith('当前模式已设为速度优先。\n')
 
 
 def test_set_model_preserves_other_settings_and_failed_replace(monkeypatch):
@@ -230,4 +267,4 @@ def test_removed_default_can_be_changed_to_plamo(old_model, monkeypatch, capsys)
     monkeypatch.setattr(models, 'available', lambda name: (True, 'ready'))
     assert cli.main(['--set-model', 'plamo']) == 0
     assert json.loads(path.read_text(encoding='utf-8')) == {'model': 'plamo', 'other': 'keep'}
-    assert 'plamo' in capsys.readouterr().out
+    assert capsys.readouterr().out == '当前模式已设为效果优先。\n'

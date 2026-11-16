@@ -17,8 +17,8 @@ class ModelSpec:
 
 
 MODELS = {
-    'argos': ModelSpec('Argos Translate', 'engine', 'ArgosEngine'),
-    'plamo': ModelSpec('PLaMo 3 Translate 0.8B Q4_K_M', 'plamo', 'PlamoEngine'),
+    'argos': ModelSpec('速度优先', 'engine', 'ArgosEngine'),
+    'plamo': ModelSpec('效果优先', 'plamo', 'PlamoEngine'),
 }
 DEFAULT_MODEL = 'argos'
 

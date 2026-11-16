@@ -18,7 +18,7 @@ def main(argv=None):
     group.add_argument('--image', help='强制输入为图片文件路径')
     group.add_argument('--check', action='store_true', help='检查系统依赖与所选本地模型')
     group.add_argument('--install-model', metavar='FILE', help='安装本地 .argosmodel 包，不联网')
-    group.add_argument('--models', action='store_true', help='列出可选模型及其可用状态')
+    group.add_argument('--models', action='store_true', help='查看模式和当前选择')
     group.add_argument('--set-model', choices=tuple(MODELS), metavar='NAME', help='设置默认翻译模型')
     parser.add_argument('--model', choices=tuple(MODELS), metavar='NAME', help='仅本次使用指定模型')
     parser.add_argument('--plain', action='store_true', help='使用纯文本输出，不显示颜色与动画')
@@ -31,14 +31,14 @@ def main(argv=None):
     try:
         if args.models:
             selected = default_model()
-            for name in MODELS:
-                ready, _ = available(name)
-                current = '（默认）' if name == selected else ''
-                print(f'{name}  {"可用" if ready else "不可用"}{current}')
+            with Presenter(sys.stdout, sys.stderr, plain=args.plain) as ui:
+                for name, spec in MODELS.items():
+                    ready, _ = available(name)
+                    ui.model_option(spec.title, selected=name == selected, available=ready)
             return 0
         if args.set_model is not None:
             set_default(args.set_model)
-            print(f'默认翻译模型已设为 {args.set_model}。')
+            print(f'当前模式已设为{MODELS[args.set_model].title}。')
             return 0
         if args.install_model is not None:
             install_model(args.install_model)

@@ -86,7 +86,7 @@ def assert_reaped(pid):
 def test_model_is_listed_and_can_be_selected(fake_runner, monkeypatch, capsys):
     monkeypatch.setattr(cli, 'Detector', lambda: lambda text: 'en')
     assert cli.main(['--models']) == 0
-    assert 'plamo  可用\n' in capsys.readouterr().out
+    assert '  效果优先\n' in capsys.readouterr().out
     assert cli.main(['--model', 'plamo', '--plain', '--text', 'Hello world.']) == 0
     assert capsys.readouterr().out == 'translation\n'
     assert models.default_model() == 'argos'
@@ -107,7 +107,7 @@ def test_default_requires_q4_instead_of_old_q3(fake_runner, monkeypatch, tmp_pat
     (directory / 'plamo-3-translate-0.8b-Q3_K_M.gguf').write_bytes(b'old model')
 
     assert cli.main(['--models']) == 0
-    assert 'plamo  不可用\n' in capsys.readouterr().out
+    assert '  效果优先（不可用）\n' in capsys.readouterr().out
 
     model = directory / 'plamo-3-translate-0.8b-Q4_K_M.gguf'
     model.write_bytes(b'new model')

@@ -46,12 +46,12 @@ printf 'Hello world.' | ts
 
 ### 切换模型
 
-翻译效果优先选择 PLaMo；响应速度优先选择 Argos。
+速度优先使用 Argos；效果优先使用 PLaMo。
 
 ```bash
-ts --models            # 查看模型
-ts --set-model plamo   # 使用 PLaMo
-ts --set-model argos   # 使用 Argos
+ts --models            # 查看模式和当前选择
+ts --set-model argos   # 切换为速度优先
+ts --set-model plamo   # 切换为效果优先
 ```
 
 ## 安装
