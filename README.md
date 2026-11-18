@@ -49,9 +49,7 @@ printf 'Hello world.' | ts
 速度优先使用 Argos；效果优先使用 PLaMo。
 
 ```bash
-ts --models            # 查看模式和当前选择
-ts --set-model argos   # 切换为速度优先
-ts --set-model plamo   # 切换为效果优先
+ts --models            # 上下选择，回车确认，Esc 取消
 ```
 
 ## 安装

@@ -1,10 +1,12 @@
 import argparse
+import os
 import sys
 
 from .engine import ArgosEngine, Detector, check, install_model
 from .errors import TsError
 from .events import Stage
 from .inputs import read_input
+from .model_picker import ModelOption, choose_model
 from .models import MODELS, available, default_model, open_translator, resolve_model, set_default
 from .presentation import Presenter
 from .text import translate_text
@@ -18,27 +20,34 @@ def main(argv=None):
     group.add_argument('--image', help='强制输入为图片文件路径')
     group.add_argument('--check', action='store_true', help='检查系统依赖与所选本地模型')
     group.add_argument('--install-model', metavar='FILE', help='安装本地 .argosmodel 包，不联网')
-    group.add_argument('--models', action='store_true', help='查看模式和当前选择')
-    group.add_argument('--set-model', choices=tuple(MODELS), metavar='NAME', help='设置默认翻译模型')
+    group.add_argument('--models', action='store_true', help='选择翻译模式；非交互终端显示列表')
     parser.add_argument('--model', choices=tuple(MODELS), metavar='NAME', help='仅本次使用指定模型')
     parser.add_argument('--plain', action='store_true', help='使用纯文本输出，不显示颜色与动画')
     args = parser.parse_args(argv)
     if args.input and any((args.text is not None, args.image is not None, args.check,
-                           args.install_model is not None, args.models, args.set_model is not None)):
+                           args.install_model is not None, args.models)):
         parser.error('位置参数不能与 --text、--image 或管理命令混用')
-    if args.model and (args.models or args.set_model is not None or args.install_model is not None):
-        parser.error('--model 不能与 --models、--set-model 或 --install-model 混用')
+    if args.model and (args.models or args.install_model is not None):
+        parser.error('--model 不能与 --models 或 --install-model 混用')
     try:
         if args.models:
-            selected = default_model()
+            interactive = (not args.plain and sys.stdin.isatty() and sys.stdout.isatty()
+                           and os.environ.get('TERM', '') not in ('', 'dumb', 'unknown'))
+            selected = default_model(allow_invalid=True) if interactive else default_model()
             with Presenter(sys.stdout, sys.stderr, plain=args.plain) as ui:
-                for name, spec in MODELS.items():
-                    ready, _ = available(name)
-                    ui.model_option(spec.title, selected=name == selected, available=ready)
-            return 0
-        if args.set_model is not None:
-            set_default(args.set_model)
-            print(f'当前模式已设为{MODELS[args.set_model].title}。')
+                options = [ModelOption(name, spec.title, available(name)[0])
+                           for name, spec in MODELS.items()]
+                if interactive:
+                    choice = choose_model(sys.stdin, ui.console, options, selected, styled=ui.styled)
+                    if choice is None:
+                        print('已取消选择。')
+                        return 0
+                    if choice != selected:
+                        set_default(choice)
+                        selected = choice
+                for option in options:
+                    ui.model_option(option.title, selected=option.name == selected,
+                                    available=option.available)
             return 0
         if args.install_model is not None:
             install_model(args.install_model)

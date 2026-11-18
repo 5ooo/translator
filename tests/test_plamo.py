@@ -90,7 +90,7 @@ def test_model_is_listed_and_can_be_selected(fake_runner, monkeypatch, capsys):
     assert cli.main(['--model', 'plamo', '--plain', '--text', 'Hello world.']) == 0
     assert capsys.readouterr().out == 'translation\n'
     assert models.default_model() == 'argos'
-    assert cli.main(['--set-model', 'plamo']) == 0
+    models.set_default('plamo')
     assert models.default_model() == 'plamo'
     assert cli.main(['--plain', '--text', 'Hello world.']) == 0
     assert capsys.readouterr().out.endswith('translation\n')

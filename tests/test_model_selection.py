@@ -42,7 +42,7 @@ def fake_translation(monkeypatch):
     return calls
 
 
-def test_models_and_set_model_do_not_read_clipboard_or_create_config(monkeypatch, capsys):
+def test_models_does_not_read_clipboard_or_create_config(monkeypatch, capsys):
     monkeypatch.setattr(cli, 'read_input', lambda *args, **kwargs: pytest.fail('管理命令读取了输入'))
     monkeypatch.setattr(cli, 'available', lambda name: (name != 'plamo', 'ready' if name != 'plamo' else '缺少模型文件'))
     assert cli.main(['--models']) == 0
@@ -50,10 +50,9 @@ def test_models_and_set_model_do_not_read_clipboard_or_create_config(monkeypatch
     assert output == '* 速度优先\n  效果优先（不可用）\n'
     assert not models.config_path().exists()
 
-    monkeypatch.setattr(models, 'available', lambda name: (True, 'ready'))
-    assert cli.main(['--set-model', 'plamo']) == 0
-    assert capsys.readouterr().out == '当前模式已设为效果优先。\n'
-    assert models.default_model() == 'plamo'
+    path = models.config_path()
+    path.parent.mkdir(parents=True)
+    path.write_text('{"model":"plamo"}', encoding='utf-8')
     monkeypatch.setattr(cli, 'available', lambda name: (True, 'ready'))
     assert cli.main(['--models']) == 0
     assert capsys.readouterr().out == '  速度优先\n* 效果优先\n'
@@ -93,9 +92,9 @@ def test_models_marks_and_colors_current_mode(selected, mode, monkeypatch):
 
 
 def test_saved_model_and_one_shot_override(fake_translation, monkeypatch, capsys):
-    monkeypatch.setattr(models, 'available', lambda name: (True, 'ready'))
-    assert cli.main(['--set-model', 'plamo']) == 0
-    capsys.readouterr()
+    path = models.config_path()
+    path.parent.mkdir(parents=True)
+    path.write_text('{"model":"plamo"}', encoding='utf-8')
     assert cli.main(['--text', 'Hello']) == 0
     assert capsys.readouterr().out == 'plamo-result\n'
     assert cli.main(['--model', 'argos', '--text', 'Hello']) == 0
@@ -105,14 +104,6 @@ def test_saved_model_and_one_shot_override(fake_translation, monkeypatch, capsys
         ('open', 'plamo'), ('translate', 'plamo', 'Hello', 'en', 'zh'), ('close', 'plamo'),
         ('open', 'argos'), ('translate', 'argos', 'Hello', 'en', 'zh'), ('close', 'argos'),
     ]
-
-
-def test_default_model_can_be_changed_back(monkeypatch, capsys):
-    monkeypatch.setattr(models, 'available', lambda name: (True, 'ready'))
-    assert cli.main(['--set-model', 'plamo']) == 0
-    assert cli.main(['--set-model', 'argos']) == 0
-    assert models.default_model() == 'argos'
-    assert capsys.readouterr().out.endswith('当前模式已设为速度优先。\n')
 
 
 def test_set_model_preserves_other_settings_and_failed_replace(monkeypatch):
@@ -136,9 +127,9 @@ def test_set_model_preserves_other_settings_and_failed_replace(monkeypatch):
 
 def test_unavailable_model_cannot_be_saved(monkeypatch, capsys):
     monkeypatch.setattr(models, 'available', lambda name: (False, '缺少本地模型文件'))
-    assert cli.main(['--set-model', 'plamo']) == 1
+    with pytest.raises(TsError, match='缺少本地模型文件'):
+        models.set_default('plamo')
     output = capsys.readouterr()
-    assert '缺少本地模型文件' in output.err
     assert not output.out
     assert not models.config_path().exists()
 
@@ -258,13 +249,21 @@ def test_invalid_options_are_rejected_without_writing_config(args):
 
 
 @pytest.mark.parametrize('old_model', ['qwen', 'm2m'])
-def test_removed_default_can_be_changed_to_plamo(old_model, monkeypatch, capsys):
+def test_removed_default_requires_interactive_reselection(old_model, capsys):
     path = models.config_path()
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps({'model': old_model, 'other': 'keep'}), encoding='utf-8')
     assert cli.main(['--models']) == 1
-    assert 'ts --set-model' in capsys.readouterr().err
-    monkeypatch.setattr(models, 'available', lambda name: (True, 'ready'))
-    assert cli.main(['--set-model', 'plamo']) == 0
-    assert json.loads(path.read_text(encoding='utf-8')) == {'model': 'plamo', 'other': 'keep'}
-    assert capsys.readouterr().out == '当前模式已设为效果优先。\n'
+    assert 'ts --models' in capsys.readouterr().err
+    assert json.loads(path.read_text(encoding='utf-8')) == {'model': old_model, 'other': 'keep'}
+
+
+def test_removed_set_model_is_not_advertised_or_accepted(capsys):
+    with pytest.raises(SystemExit) as help_exit:
+        cli.main(['--help'])
+    assert help_exit.value.code == 0
+    assert '--set-model' not in capsys.readouterr().out
+    with pytest.raises(SystemExit) as option_exit:
+        cli.main(['--set-model', 'plamo'])
+    assert option_exit.value.code == 2
+    assert not models.config_path().exists()

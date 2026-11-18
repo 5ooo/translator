@@ -27,7 +27,7 @@ def _spec(name):
     try:
         return MODELS[name]
     except (KeyError, TypeError) as exc:
-        raise TsError(f'未知模型：{name}。请运行 ts --set-model argos 或 ts --set-model plamo 重新选择默认模型。') from exc
+        raise TsError(f'未知模型：{name}。请在交互终端运行 ts --models 重新选择默认模式。') from exc
 
 
 def _module(name):
@@ -62,9 +62,14 @@ def _read_config():
     return value
 
 
-def default_model():
+def default_model(*, allow_invalid=False):
     name = _read_config().get('model', DEFAULT_MODEL)
-    _spec(name)
+    try:
+        _spec(name)
+    except TsError:
+        if allow_invalid:
+            return None
+        raise
     return name
 
 
