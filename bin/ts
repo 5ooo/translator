@@ -3,7 +3,7 @@ set -euo pipefail
 launcher="$(readlink -f -- "${BASH_SOURCE[0]}")"
 project_dir="$(cd -- "$(dirname -- "$launcher")/.." && pwd)"
 export PATH="$project_dir/.runtime/system/usr/bin:$PATH"
-export LD_LIBRARY_PATH="$project_dir/.runtime/vendor/lib:$project_dir/.runtime/system/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_LIBRARY_PATH="$project_dir/.runtime/system/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export XDG_DATA_HOME="${XDG_DATA_HOME:-$project_dir/.runtime/data}"
 export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$project_dir/.runtime/config}"
 export XDG_CACHE_HOME="${XDG_CACHE_HOME:-$project_dir/.runtime/cache}"

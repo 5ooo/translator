@@ -12,6 +12,7 @@ dist/
 !.env.example
 *.log
 .tags
+/.tags.*
 *.pyc
 *.tmp
 *.part

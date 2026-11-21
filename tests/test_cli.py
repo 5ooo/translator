@@ -47,9 +47,10 @@ def test_missing_model_never_downloads(monkeypatch):
         engine.ArgosEngine().translate('Hello', 'en', 'zh')
 
 
-def test_install_nonexistent_model():
-    with pytest.raises(TsError, match='本地 .argosmodel'):
-        engine.install_model('missing.argosmodel')
+def test_local_model_import_is_not_supported():
+    with pytest.raises(SystemExit) as error:
+        cli.main(['--install-model', 'model.argosmodel'])
+    assert error.value.code == 2
 
 
 class Tty(io.StringIO):

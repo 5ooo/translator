@@ -11,5 +11,3 @@
 当 stdout 不是终端、设置了 `NO_COLOR`、指定 `--plain`，或 `TERM` 为空、`dumb`、`unknown` 时，不启用排版。动画还要求 stderr 是终端。stdin 是否为终端只影响默认输入来源。
 
 普通文字只输出译文；图片输出 OCR 原文和译文。OCR 原文保留已有空白和换行。详细规则见[命令参考](INTERFACE.md)。
-
-[截图](assets/terminal-preview.png)和[动画](assets/terminal-preview.gif)是旧版显示记录，不代表当前布局。

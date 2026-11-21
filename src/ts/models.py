@@ -96,7 +96,7 @@ def available(name):
     missing = {('en', 'zh'), ('zh', 'en')} - pairs
     if missing:
         pairs_text = '、'.join(f'{source}→{target}' for source, target in sorted(missing))
-        return False, f'缺少本地 {pairs_text} 模型；可用 ts --install-model 导入。'
+        return False, f'缺少本地 {pairs_text} 模型；请在项目目录运行 ./install.sh 联网安装。'
     return True, '中英双向模型已安装'
 
 

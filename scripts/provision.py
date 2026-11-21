@@ -72,7 +72,7 @@ def verified_download(spec):
         except Exception as exc:
             errors.append(f'{url}: {exc}')
             partial.unlink(missing_ok=True)
-    raise RuntimeError('模型下载失败，请将已校验模型放入 ' + str(cache) + '\n' + '\n'.join(errors))
+    raise RuntimeError('模型下载失败，请检查网络后重新运行 ./install.sh。\n' + '\n'.join(errors))
 
 
 def install_models():
@@ -111,13 +111,8 @@ def main():
 
 if __name__ == '__main__':
     try:
-        parser = argparse.ArgumentParser(description='准备 ts 运行环境')
-        parser.add_argument('--link-only', action='store_true', help='仅安装命令链接')
-        args = parser.parse_args()
-        if args.link_only:
-            install_command()
-        else:
-            main()
+        argparse.ArgumentParser(description='准备 ts 运行环境').parse_args()
+        main()
     except (OSError, RuntimeError, subprocess.CalledProcessError) as exc:
         print(f'环境安装失败：{exc}', file=sys.stderr)
         raise SystemExit(1)

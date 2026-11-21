@@ -14,4 +14,4 @@
 
 ## 其他依赖
 
-CTranslate2、SentencePiece、Tesseract、llama.cpp、langid、Pillow、Rich、PyTorch 及传递依赖各有许可证。分发 Python 环境、OCR 资源或离线包时，按实际打包内容检查并保留适用的许可和署名文件。
+CTranslate2、SentencePiece、Tesseract、llama.cpp、langid、Pillow、Rich、PyTorch 及传递依赖各有许可证。分发相关组件时，按实际内容检查并保留适用的许可和署名文件。

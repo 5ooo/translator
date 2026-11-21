@@ -2,7 +2,7 @@ import argparse
 import os
 import sys
 
-from .engine import ArgosEngine, Detector, check, install_model
+from .engine import ArgosEngine, Detector, check
 from .errors import TsError
 from .events import Stage
 from .inputs import read_input
@@ -19,16 +19,14 @@ def main(argv=None):
     group.add_argument('--text', help='强制输入为文字')
     group.add_argument('--image', help='强制输入为图片文件路径')
     group.add_argument('--check', action='store_true', help='检查系统依赖与所选本地模型')
-    group.add_argument('--install-model', metavar='FILE', help='安装本地 .argosmodel 包，不联网')
     group.add_argument('--models', action='store_true', help='选择翻译模式；非交互终端显示列表')
     parser.add_argument('--model', choices=tuple(MODELS), metavar='NAME', help='仅本次使用指定模型')
     parser.add_argument('--plain', action='store_true', help='使用纯文本输出，不显示颜色与动画')
     args = parser.parse_args(argv)
-    if args.input and any((args.text is not None, args.image is not None, args.check,
-                           args.install_model is not None, args.models)):
+    if args.input and any((args.text is not None, args.image is not None, args.check, args.models)):
         parser.error('位置参数不能与 --text、--image 或管理命令混用')
-    if args.model and (args.models or args.install_model is not None):
-        parser.error('--model 不能与 --models 或 --install-model 混用')
+    if args.model and args.models:
+        parser.error('--model 不能与 --models 混用')
     try:
         if args.models:
             interactive = (not args.plain and sys.stdin.isatty() and sys.stdout.isatty()
@@ -48,10 +46,6 @@ def main(argv=None):
                 for option in options:
                     ui.model_option(option.title, selected=option.name == selected,
                                     available=option.available)
-            return 0
-        if args.install_model is not None:
-            install_model(args.install_model)
-            print('本地模型安装完成。')
             return 0
         selected = resolve_model(args.model)
         if args.check:

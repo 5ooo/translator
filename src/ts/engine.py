@@ -1,4 +1,3 @@
-from pathlib import Path
 import importlib.util
 import shutil
 
@@ -44,7 +43,7 @@ class ArgosEngine:
                 pkg = next((p for p in local_packages() if p.type == 'translate' and
                             (p.from_code, p.to_code) == key), None)
                 if pkg is None:
-                    raise TsError(f'缺少本地 {source}→{target} 模型。使用 ts --install-model 文件.argosmodel 安装。')
+                    raise TsError(f'缺少本地 {source}→{target} 模型，请在项目目录运行 ./install.sh 联网安装。')
                 if not hasattr(pkg, 'tokenizer') or not (pkg.package_path / 'model').is_dir():
                     raise TsError(f'{source}→{target} 模型格式不支持或不完整。')
                 self.loaded[key] = (pkg, ctranslate2.Translator(str(pkg.package_path / 'model'), device='cpu'))
@@ -66,17 +65,6 @@ class ArgosEngine:
             raise
         except Exception as exc:
             raise TsError(f'Argos 本地推理失败：{exc}') from exc
-
-
-def install_model(path):
-    source = Path(path).expanduser()
-    if not source.is_file() or source.suffix != '.argosmodel':
-        raise TsError('模型必须是已存在的本地 .argosmodel 文件。')
-    try:
-        from argostranslate import package
-        package.install_from_path(source)
-    except Exception as exc:
-        raise TsError(f'安装本地模型失败：{exc}') from exc
 
 
 def check(model='argos'):

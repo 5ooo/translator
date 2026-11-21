@@ -83,6 +83,14 @@ def test_installer_creates_project_local_python_and_reuses_it(installation):
     assert len([entry for entry in calls(env) if entry['args'][:2] == ['python', 'install']]) == 1
 
 
+def test_offline_installer_option_is_rejected(installation):
+    project, env = installation
+    result = subprocess.run([str(project / 'install.sh'), '--offline'], env=env, capture_output=True, text=True)
+    assert result.returncode == 2
+    assert not (project / '.venv-uv').exists()
+    assert not Path(env['TS_TEST_LOG']).exists()
+
+
 def test_installer_respects_explicit_python(installation):
     project, env = installation
     env['TS_PYTHON'] = '/custom/python'

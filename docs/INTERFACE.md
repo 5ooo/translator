@@ -10,11 +10,10 @@
 | `--models` | 交互选择模式；非交互时只显示模式列表 |
 | `--model argos\|plamo` | 只为本次翻译或自检选择模型 |
 | `--check` | 检查当前或指定模型、OCR 和公共依赖 |
-| `--install-model 文件.argosmodel` | 导入本地 Argos 模型包 |
 | `--plain` | 纯文本输出，不显示颜色和动画 |
 | `--help` | 显示命令帮助 |
 
-`--text`、`--image`、`--models`、`--check` 和 `--install-model` 互斥，也不能与位置参数混用。`--model` 不能与 `--models` 或 `--install-model` 混用。
+`--text`、`--image`、`--models` 和 `--check` 互斥，也不能与位置参数混用。`--model` 不能与 `--models` 混用。
 
 ## 输入与输出
 

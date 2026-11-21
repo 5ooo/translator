@@ -52,46 +52,38 @@ def digest(path):
     return sha.hexdigest()
 
 
-def _fetch(source, url, target, expected):
-    if source is not None:
-        source = source.expanduser()
-        if not source.is_file():
-            raise RuntimeError(f'本地文件不存在：{source}')
-        print(f'复制 {source.name}', flush=True)
-        with source.open('rb') as reader, target.open('xb') as writer:
-            shutil.copyfileobj(reader, writer, length=1024 * 1024)
+def _fetch(url, target, expected):
+    print(f'下载 {url}', flush=True)
+    last_error = None
+    for attempt in range(2):
+        try:
+            with urllib.request.urlopen(url, timeout=90) as reader, target.open('xb') as writer:
+                shutil.copyfileobj(reader, writer, length=1024 * 1024)
+            break
+        except (OSError, http.client.HTTPException) as exc:
+            last_error = exc
+            target.unlink(missing_ok=True)
+            if attempt == 0:
+                print('下载连接中断，正在重试。', flush=True)
     else:
-        print(f'下载 {url}', flush=True)
-        last_error = None
-        for attempt in range(2):
+        commands = []
+        if shutil.which('curl'):
+            commands.append(['curl', '--fail', '--location', '--silent', '--show-error',
+                             '--connect-timeout', '15', '--max-time', '1800', '--retry', '2',
+                             '--output', str(target), url])
+        if shutil.which('wget'):
+            commands.append(['wget', '--quiet', '--timeout=90', '--tries=3',
+                             '--output-document', str(target), url])
+        for command in commands:
+            print(f'使用 {command[0]} 重试下载。', flush=True)
             try:
-                with urllib.request.urlopen(url, timeout=90) as reader, target.open('xb') as writer:
-                    shutil.copyfileobj(reader, writer, length=1024 * 1024)
+                subprocess.run(command, check=True, timeout=2000)
                 break
-            except (OSError, http.client.HTTPException) as exc:
+            except (OSError, subprocess.SubprocessError) as exc:
                 last_error = exc
                 target.unlink(missing_ok=True)
-                if attempt == 0:
-                    print('下载连接中断，正在重试。', flush=True)
         else:
-            commands = []
-            if shutil.which('curl'):
-                commands.append(['curl', '--fail', '--location', '--silent', '--show-error',
-                                 '--connect-timeout', '15', '--max-time', '1800', '--retry', '2',
-                                 '--output', str(target), url])
-            if shutil.which('wget'):
-                commands.append(['wget', '--quiet', '--timeout=90', '--tries=3',
-                                 '--output-document', str(target), url])
-            for command in commands:
-                print(f'使用 {command[0]} 重试下载。', flush=True)
-                try:
-                    subprocess.run(command, check=True, timeout=2000)
-                    break
-                except (OSError, subprocess.SubprocessError) as exc:
-                    last_error = exc
-                    target.unlink(missing_ok=True)
-            else:
-                raise RuntimeError(f'下载失败，请检查网络：{url}') from last_error
+            raise RuntimeError(f'下载失败，请检查网络：{url}') from last_error
     if digest(target) != expected:
         raise RuntimeError(f'{target.name} 的 SHA256 校验失败，未安装。')
 
@@ -175,7 +167,7 @@ def _extract_runtime(archive_path, target, expected_archive):
         raise RuntimeError('运行器文件校验失败。')
 
 
-def install_model(source=None):
+def install_model():
     target = model_destination()
     if os.path.lexists(target):
         if _matches_model(target):
@@ -185,7 +177,7 @@ def install_model(source=None):
     target.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=f'.{target.name}-install-', dir=target.parent) as temporary:
         staged = Path(temporary) / MODEL_NAME
-        _fetch(source, MODEL_URL, staged, MODEL_SHA256)
+        _fetch(MODEL_URL, staged, MODEL_SHA256)
         try:
             os.link(staged, target)
         except FileExistsError as exc:
@@ -196,7 +188,7 @@ def install_model(source=None):
     return target
 
 
-def install_runtime(source=None, variant='cpu'):
+def install_runtime(variant='cpu'):
     if platform.system() != 'Linux' or platform.machine().lower() not in ('x86_64', 'amd64'):
         raise RuntimeError('自动安装运行器目前只支持 Linux x86-64；可用 --model-only 并自行提供 llama-server。')
     target = runtime_destination(variant)
@@ -212,7 +204,7 @@ def install_runtime(source=None, variant='cpu'):
         archive = temporary / 'llama-runtime.tar.gz'
         staged = temporary / 'runtime'
         staged.mkdir()
-        _fetch(source, url, archive, expected)
+        _fetch(url, archive, expected)
         _extract_runtime(archive, staged, expected)
         try:
             _publish_directory(staged, target)
@@ -226,20 +218,17 @@ def install_runtime(source=None, variant='cpu'):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description='安装固定版本的 PLaMo 3 离线翻译模型')
-    parser.add_argument('--model-file', type=Path, help='从本地 GGUF 文件安装，不下载模型')
-    parser.add_argument('--runtime-archive', type=Path, help='从本地官方压缩包安装，不下载运行器')
     parser.add_argument('--vulkan', action='store_true', help='额外安装官方 Vulkan 显卡运行器')
-    parser.add_argument('--vulkan-archive', type=Path, help='从本地官方 Vulkan 压缩包安装')
     parser.add_argument('--model-only', action='store_true', help='只安装模型，使用已有 llama-server')
     args = parser.parse_args(argv)
-    if args.model_only and (args.runtime_archive or args.vulkan or args.vulkan_archive):
+    if args.model_only and args.vulkan:
         parser.error('--model-only 不可与运行器安装选项同时使用')
     try:
-        install_model(args.model_file)
+        install_model()
         if not args.model_only:
-            install_runtime(args.runtime_archive)
-        if args.vulkan or args.vulkan_archive:
-            install_runtime(args.vulkan_archive, 'vulkan')
+            install_runtime()
+        if args.vulkan:
+            install_runtime('vulkan')
         return 0
     except (OSError, RuntimeError, ValueError, tarfile.TarError) as exc:
         print(f'PLaMo 安装失败：{exc}', file=sys.stderr)

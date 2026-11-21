@@ -2,6 +2,8 @@ import hashlib
 import importlib.util
 import io
 from pathlib import Path
+import subprocess
+import sys
 import urllib.error
 
 import pytest
@@ -30,6 +32,12 @@ def test_command_link_is_idempotent(installation):
     provision.install_command()
     provision.install_command()
     assert (home / '.local/bin/ts').resolve() == root / 'bin/ts'
+
+
+def test_link_only_option_is_rejected():
+    script = Path(__file__).parents[1] / 'scripts/provision.py'
+    result = subprocess.run([sys.executable, str(script), '--link-only'], capture_output=True, text=True)
+    assert result.returncode == 2
 
 
 def test_command_install_never_overwrites_other_file(installation):

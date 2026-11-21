@@ -19,33 +19,18 @@ ts --check --model plamo
 
 使用项目启动器且未设置 `XDG_CONFIG_HOME` 时，选择保存在 `.runtime/config/ts/config.json`；设置该变量时保存在其 `ts/config.json` 下。损坏的配置可先修复或移走；也可用 `--model argos` 临时绕过默认选择。
 
-## 安装 Argos
+## 安装模型
 
-源码安装脚本安装英译中和中译英两个模型。已有本地模型包时可离线导入：
+`./install.sh` 联网安装 Argos 中英双向模型，以及 PLaMo 模型和 CPU 运行器。模型文件名、来源和 SHA256 记录在 `scripts/models.json` 和 `scripts/install-plamo.py`。
 
-```bash
-ts --install-model ./translate-en_zh-1_9.argosmodel
-ts --install-model ./translate-zh_en-1_9.argosmodel
-```
-
-模型文件名、来源和 SHA256 记录在 `scripts/models.json`。
-
-## 安装 PLaMo
-
-源码安装和离线包均包含 PLaMo。需要重新安装时，可在项目目录运行：
+需要重新安装 PLaMo 时，可在项目目录运行：
 
 ```bash
 ./bin/python scripts/install-plamo.py
 ts --check --model plamo
 ```
 
-模型为 `plamo-3-translate-0.8b-Q4_K_M.gguf`，约 573 MB。添加 `--vulkan` 可安装可选的 Vulkan 运行器。已有模型和官方运行器压缩包时，可离线安装：
-
-```bash
-./bin/python scripts/install-plamo.py --model-file ./plamo.gguf --runtime-archive ./llama-b12110-bin-ubuntu-x64.tar.gz
-```
-
-Vulkan 压缩包可通过 `--vulkan-archive` 指定。脚本校验固定版本的 SHA256，不覆盖不同的现有文件。模型来源及许可见[第三方许可](THIRD_PARTY_LICENSES.md)。
+模型为 `plamo-3-translate-0.8b-Q4_K_M.gguf`，约 573 MB。添加 `--vulkan` 可安装可选的 Vulkan 运行器。脚本校验固定版本的 SHA256，不覆盖不同的现有文件。模型来源及许可见[第三方许可](THIRD_PARTY_LICENSES.md)。
 
 模型默认位于 `.runtime/data/ts/models/plamo3/`。设置 `XDG_DATA_HOME` 时优先查找其 `ts/models/plamo3/`，找不到再查项目目录；`TS_PLAMO_MODEL` 可显式指定文件。`TS_PLAMO_RUNNER` 可指定本地 `llama-server`。默认优先尝试已安装的 Vulkan 运行器，启动失败时尝试 CPU；设置 `TS_PLAMO_DEVICE=cpu` 仅用 CPU。
 
