@@ -56,7 +56,7 @@ def inputs():
                 raise RuntimeError(f'Argos 模型缺少文件：{package / relative}')
 
     paths = [ROOT / name for name in (
-        'README.md', 'CHANGELOG.md', 'install.sh', 'pyproject.toml', 'requirements.txt',
+        'README.md', 'README_zh.md', 'CHANGELOG.md', 'install.sh', 'pyproject.toml', 'requirements.txt',
         'requirements.lock', 'bin', 'docs', 'scripts', 'src', 'tests',
         '.runtime/python', '.runtime/system', '.venv-uv/lib', '.venv-uv/lib64',
         '.venv-uv/bin/python', '.venv-uv/bin/python3', '.venv-uv/bin/python3.12',

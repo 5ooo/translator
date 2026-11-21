@@ -3,11 +3,13 @@ import argparse
 import ctypes
 import errno
 import hashlib
+import http.client
 import json
 import os
 from pathlib import Path, PurePosixPath
 import platform
 import shutil
+import subprocess
 import sys
 import tarfile
 import tempfile
@@ -60,8 +62,36 @@ def _fetch(source, url, target, expected):
             shutil.copyfileobj(reader, writer, length=1024 * 1024)
     else:
         print(f'下载 {url}', flush=True)
-        with urllib.request.urlopen(url, timeout=90) as reader, target.open('xb') as writer:
-            shutil.copyfileobj(reader, writer, length=1024 * 1024)
+        last_error = None
+        for attempt in range(2):
+            try:
+                with urllib.request.urlopen(url, timeout=90) as reader, target.open('xb') as writer:
+                    shutil.copyfileobj(reader, writer, length=1024 * 1024)
+                break
+            except (OSError, http.client.HTTPException) as exc:
+                last_error = exc
+                target.unlink(missing_ok=True)
+                if attempt == 0:
+                    print('下载连接中断，正在重试。', flush=True)
+        else:
+            commands = []
+            if shutil.which('curl'):
+                commands.append(['curl', '--fail', '--location', '--silent', '--show-error',
+                                 '--connect-timeout', '15', '--max-time', '1800', '--retry', '2',
+                                 '--output', str(target), url])
+            if shutil.which('wget'):
+                commands.append(['wget', '--quiet', '--timeout=90', '--tries=3',
+                                 '--output-document', str(target), url])
+            for command in commands:
+                print(f'使用 {command[0]} 重试下载。', flush=True)
+                try:
+                    subprocess.run(command, check=True, timeout=2000)
+                    break
+                except (OSError, subprocess.SubprocessError) as exc:
+                    last_error = exc
+                    target.unlink(missing_ok=True)
+            else:
+                raise RuntimeError(f'下载失败，请检查网络：{url}') from last_error
     if digest(target) != expected:
         raise RuntimeError(f'{target.name} 的 SHA256 校验失败，未安装。')
 

@@ -11,3 +11,13 @@ dist/
 .env.*
 !.env.example
 *.log
+.tags
+*.pyc
+*.tmp
+*.part
+*.swp
+*.whl
+*.deb
+*.gguf
+*.tar.gz
+*.zip

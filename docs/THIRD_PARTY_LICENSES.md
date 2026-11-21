@@ -1,0 +1,17 @@
+# 第三方许可和模型来源
+
+项目自身尚无 `LICENSE` 文件。本文列出主要来源，不是完整许可证审计；公开分发前需确认项目许可，并检查实际打包的模型、运行器和依赖。
+
+## Argos
+
+项目使用 Argos Translate 1.9.6，其[程序许可证](https://raw.githubusercontent.com/argosopentech/argos-translate/v1.9.6/LICENSE)为 MIT。中英双向模型包的文件名、来源和 SHA256 记录在 `scripts/models.json`。
+
+两个模型包的 README 说明，原始 OPUS 模型采用 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)，并列出 Jörg Tiedemann 和 Santhosh Thottingal。CC BY 4.0 包含署名、许可链接和修改说明等要求。原始模型许可不等于模型包内所有文件的完整许可；分发前需进一步确认。
+
+## PLaMo
+
+项目使用 [PLaMo 3 Translate 0.8B Q4_K_M](https://huggingface.co/pfnet/plamo-3-translate-0.8b-GGUF)，适用 PLaMo Community License。模型页说明个人及其他非商业使用免费，商业使用有注册或单独许可条件；以实际用途和许可文本为准。固定模型与运行器版本、来源及 SHA256 记录在 `scripts/install-plamo.py`。
+
+## 其他依赖
+
+CTranslate2、SentencePiece、Tesseract、llama.cpp、langid、Pillow、Rich、PyTorch 及传递依赖各有许可证。分发 Python 环境、OCR 资源或离线包时，按实际打包内容检查并保留适用的许可和署名文件。

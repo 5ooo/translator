@@ -18,10 +18,22 @@ if [[ "$architecture" != x86_64 && "$architecture" != amd64 ]]; then
     printf '提示：PLaMo 运行器自动安装仅支持 Linux x86-64。\n'
 fi
 
-if command -v uv >/dev/null 2>&1; then
-    printf 'uv：可用\n'
+local_uv="$project_dir/.runtime/tools/uv-0.9.10/uv"
+if [[ -x "$local_uv" ]]; then
+    if [[ "$("$local_uv" --version)" != 'uv 0.9.10' ]]; then
+        printf '项目内 uv 版本不符：%s\n' "$local_uv" >&2
+        exit 1
+    fi
+    printf 'uv 0.9.10：可用\n'
+elif command -v uv >/dev/null 2>&1 && [[ "$(uv --version)" == 'uv 0.9.10' ]]; then
+    printf 'uv 0.9.10：可用\n'
+elif [[ -e "$local_uv" || -L "$local_uv" || -e "${local_uv%/*}/uvx" || -L "${local_uv%/*}/uvx" ]]; then
+    printf '项目内 uv 文件已存在但不可用：%s\n' "${local_uv%/*}" >&2
+    exit 1
+elif command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then
+    printf 'uv 0.9.10：安装时将下载到项目目录\n'
 else
-    printf 'uv：未找到，请先安装 uv。\n' >&2
+    printf '缺少 uv 0.9.10、curl 和 wget，无法自动部署。\n' >&2
     exit 1
 fi
 

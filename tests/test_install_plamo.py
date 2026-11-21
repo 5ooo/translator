@@ -89,6 +89,100 @@ def test_wrong_model_digest_leaves_no_installed_model(sources):
     assert list(installer.model_destination().parent.iterdir()) == []
 
 
+def test_interrupted_download_retries_after_removing_partial_file(tmp_path, monkeypatch):
+    data = b'complete model data'
+    attempts = []
+
+    class Interrupted(io.BytesIO):
+        def read(self, size=-1):
+            if self.tell() > 0:
+                raise OSError('connection interrupted')
+            return super().read(3)
+
+    def open_url(*args, **kwargs):
+        attempts.append(1)
+        return Interrupted(data) if len(attempts) == 1 else io.BytesIO(data)
+
+    monkeypatch.setattr(installer.urllib.request, 'urlopen', open_url)
+    target = tmp_path / 'model'
+    installer._fetch(None, 'https://example.invalid/model', target, hashlib.sha256(data).hexdigest())
+    assert target.read_bytes() == data
+    assert len(attempts) == 2
+
+
+def test_failed_python_download_uses_curl_and_checks_digest(tmp_path, monkeypatch):
+    data = b'complete runtime data'
+    target = tmp_path / 'runtime'
+
+    def unavailable(*args, **kwargs):
+        raise OSError('TLS connection failed')
+
+    def curl(command, *, check, timeout):
+        assert command[0] == 'curl'
+        assert not target.exists()
+        target.write_bytes(data)
+
+    monkeypatch.setattr(installer.urllib.request, 'urlopen', unavailable)
+    monkeypatch.setattr(installer.shutil, 'which', lambda name: '/usr/bin/curl' if name == 'curl' else None)
+    monkeypatch.setattr(installer.subprocess, 'run', curl)
+    installer._fetch(None, 'https://example.invalid/runtime', target, hashlib.sha256(data).hexdigest())
+    assert target.read_bytes() == data
+
+
+def test_failed_download_without_external_tools_reports_error(tmp_path, monkeypatch):
+    def unavailable(*args, **kwargs):
+        raise OSError('TLS connection failed')
+
+    monkeypatch.setattr(installer.urllib.request, 'urlopen', unavailable)
+    monkeypatch.setattr(installer.shutil, 'which', lambda name: None)
+    target = tmp_path / 'runtime'
+    with pytest.raises(RuntimeError, match='下载失败'):
+        installer._fetch(None, 'https://example.invalid/runtime', target, 'unused')
+    assert not target.exists()
+
+
+def test_failed_python_download_uses_wget_without_curl(tmp_path, monkeypatch):
+    data = b'complete runtime data'
+    target = tmp_path / 'runtime'
+
+    def unavailable(*args, **kwargs):
+        raise OSError('TLS connection failed')
+
+    def wget(command, *, check, timeout):
+        assert command[0] == 'wget'
+        target.write_bytes(data)
+
+    monkeypatch.setattr(installer.urllib.request, 'urlopen', unavailable)
+    monkeypatch.setattr(installer.shutil, 'which', lambda name: '/usr/bin/wget' if name == 'wget' else None)
+    monkeypatch.setattr(installer.subprocess, 'run', wget)
+    installer._fetch(None, 'https://example.invalid/runtime', target, hashlib.sha256(data).hexdigest())
+    assert target.read_bytes() == data
+
+
+def test_failed_curl_download_falls_back_to_wget(tmp_path, monkeypatch):
+    data = b'complete runtime data'
+    target = tmp_path / 'runtime'
+    commands = []
+
+    def unavailable(*args, **kwargs):
+        raise OSError('TLS connection failed')
+
+    def download(command, *, check, timeout):
+        commands.append(command[0])
+        if command[0] == 'curl':
+            target.write_bytes(b'partial')
+            raise installer.subprocess.CalledProcessError(1, command)
+        assert not target.exists()
+        target.write_bytes(data)
+
+    monkeypatch.setattr(installer.urllib.request, 'urlopen', unavailable)
+    monkeypatch.setattr(installer.shutil, 'which', lambda name: f'/usr/bin/{name}')
+    monkeypatch.setattr(installer.subprocess, 'run', download)
+    installer._fetch(None, 'https://example.invalid/runtime', target, hashlib.sha256(data).hexdigest())
+    assert target.read_bytes() == data
+    assert commands == ['curl', 'wget']
+
+
 def test_modified_runtime_is_not_replaced(sources):
     _, archive = sources
     runtime = installer.install_runtime(archive)
