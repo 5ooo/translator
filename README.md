@@ -47,3 +47,5 @@ To install from source, run `./install.sh` in the project directory. The first i
 ## Documentation
 
 Detailed guides are in Chinese: [usage](docs/USAGE.md), [command reference](docs/INTERFACE.md), [architecture](docs/ARCHITECTURE.md), [tests](docs/TEST_REPORT.md), [third-party licenses](docs/THIRD_PARTY_LICENSES.md), and the [changelog](CHANGELOG.md).
+
+The project source is licensed under [MIT](LICENSE). Models and dependencies have their own licenses.

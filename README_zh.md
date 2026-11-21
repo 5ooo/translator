@@ -45,3 +45,5 @@ export PATH="$HOME/.local/bin:$PATH"
 ## 文档
 
 [使用说明](docs/USAGE.md) · [命令参考](docs/INTERFACE.md) · [架构设计](docs/ARCHITECTURE.md) · [测试报告](docs/TEST_REPORT.md) · [第三方许可](docs/THIRD_PARTY_LICENSES.md) · [变更记录](CHANGELOG.md)
+
+项目源码采用 [MIT 许可证](LICENSE)；模型和依赖适用各自的许可证。
