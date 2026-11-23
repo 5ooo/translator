@@ -8,11 +8,10 @@
 git clone https://github.com/5ooo/translator.git
 cd translator
 ./install.sh
-export PATH="$HOME/.local/bin:$PATH"
 ts --check
 ```
 
-首次安装需要联网。脚本会准备 Python、依赖、OCR、剪贴板工具和两个翻译模型；安装完成后，语言识别、OCR 和翻译都在本地运行，不需要联网。`export` 只影响当前 shell；需要时将 PATH 设置加入自己的 shell 配置。
+首次安装需要联网。脚本会准备 Python、依赖、OCR、剪贴板工具和两个翻译模型；安装完成后，语言识别、OCR 和翻译都在本地运行，不需要联网。
 
 脚本复用项目内或系统中已有的 uv 0.9.10；否则使用 curl 或 wget 下载固定版本的[官方 uv 安装脚本](https://docs.astral.sh/uv/reference/installer/)，校验 SHA256 后安装到 `.runtime/tools/uv-0.9.10/`，不修改 shell 配置。脚本默认在 `.runtime/python/` 安装 Python 3.12.12，在 `.venv-uv/` 安装锁定依赖，并下载和校验两个模型及 PLaMo CPU 运行器。
 
@@ -22,7 +21,7 @@ ts --check
 
 当前安装流程在 Ubuntu 24.04 x86-64、Python 3.12 上验证；其他系统尚未验证。剪贴板功能需要 X11 或 Wayland 桌面会话，PLaMo 需要本机回环接口和可读的 `/proc`。首次创建环境时可用 `TS_PYTHON` 指定解释器；已有虚拟环境不会自动更换，外部解释器创建的环境不保证可随目录移动。
 
-安装脚本创建 `~/.local/bin/ts` 链接。若同名文件或链接属于其他命令，脚本不会覆盖，可直接运行 `./bin/ts`。移动项目后，确认旧链接属于本项目，再更新链接。
+安装脚本优先在 PATH 中的 `~/.local/bin` 或 `~/bin` 创建 `ts` 链接；如果没有可用的用户目录，则使用 PATH 中的 `/usr/local/bin`。写入该系统目录需要管理员权限，安装时可能要求输入 `sudo` 密码。若已有同名命令，脚本不会覆盖；可直接运行 `./bin/ts`。如果这些目录均不在 PATH 中，脚本会提示无法安装命令。移动项目后，确认旧链接属于本项目，再更新链接。
 
 ## 本地文件
 

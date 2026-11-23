@@ -4,6 +4,8 @@
 
 ts 是一个 Linux 离线终端中英翻译工具。复制文字或图片后运行 `ts`，即可翻译剪贴板内容。
 
+![使用演示](docs/assets/usage.gif)
+
 ## 使用
 
 复制文字或图片，然后运行：
@@ -26,7 +28,6 @@ ts 'Hello world.'
 git clone https://github.com/5ooo/translator.git
 cd translator
 ./install.sh
-export PATH="$HOME/.local/bin:$PATH"
 ```
 
-更多用法和环境要求见[使用说明](docs/USAGE.md)和[安装说明](docs/INSTALLATION.md)。项目源码采用 [MIT 许可证](LICENSE)。
+安装时可能需要输入管理员密码。更多用法和环境要求见[使用说明](docs/USAGE.md)和[安装说明](docs/INSTALLATION.md)。项目源码采用 [MIT 许可证](LICENSE)。

@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / '.runtime'
 SYSTEM = RUNTIME / 'system'
 PACKAGES = RUNTIME / 'data/argos-translate/packages'
+SYSTEM_BIN = Path('/usr/local/bin')
 NATIVE_PACKAGES = ('tesseract-ocr', 'tesseract-ocr-eng', 'tesseract-ocr-chi-sim',
                    'tesseract-ocr-osd', 'wl-clipboard', 'xclip')
 
@@ -88,25 +89,65 @@ def install_models():
         print(f'已安装本地模型 {spec["from"]}→{spec["to"]}', flush=True)
 
 
-def install_command():
-    destination = Path.home() / '.local/bin/ts'
+def install_command(command_path=None):
+    search_path = os.environ.get('PATH', '') if command_path is None else command_path
     source = ROOT / 'bin/ts'
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    if destination.is_symlink() and destination.resolve() == source:
-        return
-    if destination.exists() or destination.is_symlink():
-        raise RuntimeError(f'{destination} 已存在且属于其他命令，未覆盖。可直接运行 {source}')
-    destination.symlink_to(source)
-    if str(destination.parent) not in os.environ['PATH'].split(os.pathsep):
-        print(f'请将 {destination.parent} 加入 PATH；当前可使用 {source}', flush=True)
+    existing = shutil.which('ts', path=search_path)
+    if existing:
+        if Path(existing).resolve() == source.resolve():
+            return
+        raise RuntimeError(f'{existing} 已存在且属于其他命令，未覆盖。可直接运行 {source}')
+
+    entries = [Path(value) for value in search_path.split(os.pathsep)
+               if value and Path(value).is_absolute()]
+    entry_paths = {entry.resolve() for entry in entries}
+    user_bins = [Path.home() / '.local/bin', Path.home() / 'bin']
+
+    def link(destination):
+        if destination.is_symlink() and destination.resolve() == source.resolve():
+            return
+        if destination.exists() or destination.is_symlink():
+            raise RuntimeError(f'{destination} 已存在且属于其他命令，未覆盖。可直接运行 {source}')
+        try:
+            destination.symlink_to(source)
+        except FileExistsError as exc:
+            raise RuntimeError(f'{destination} 在安装期间出现，未覆盖。') from exc
+
+    for directory in user_bins:
+        if directory.resolve() not in entry_paths:
+            continue
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            link(directory / 'ts')
+            return
+        except PermissionError:
+            continue
+
+    if SYSTEM_BIN.resolve() not in entry_paths or not SYSTEM_BIN.is_dir():
+        raise RuntimeError(f'PATH 中没有可用的命令目录。可直接运行 {source}')
+    destination = SYSTEM_BIN / 'ts'
+    try:
+        link(destination)
+    except PermissionError as exc:
+        sudo = shutil.which('sudo', path=search_path)
+        if not sudo:
+            raise RuntimeError(f'安装到 {SYSTEM_BIN} 需要管理员权限。可直接运行 {source}') from exc
+        print(f'需要管理员权限以安装 {destination}。', flush=True)
+        try:
+            subprocess.run([sudo, '/usr/bin/ln', '-sT', '--', str(source), str(destination)], check=True)
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise RuntimeError(f'无法安装 {destination}，未覆盖已有文件。可直接运行 {source}') from error
+        if not destination.is_symlink() or destination.resolve() != source.resolve():
+            raise RuntimeError(f'无法确认 {destination} 指向项目命令。')
 
 
 def main():
     RUNTIME.mkdir(parents=True, exist_ok=True)
+    command_path = os.environ.get('PATH', '')
     environment()
     install_native()
     install_models()
-    install_command()
+    install_command(command_path)
 
 
 if __name__ == '__main__':

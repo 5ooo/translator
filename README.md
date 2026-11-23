@@ -4,6 +4,8 @@
 
 An offline Chinese-English terminal translator for Linux. Copy text or an image, then run `ts` to translate the clipboard.
 
+![Usage demonstration](docs/assets/usage-en.gif)
+
 ## Use
 
 Copy text or an image, then run:
@@ -26,7 +28,6 @@ Installation requires a network connection. After setup, translation runs offlin
 git clone https://github.com/5ooo/translator.git
 cd translator
 ./install.sh
-export PATH="$HOME/.local/bin:$PATH"
 ```
 
-See the [usage guide](docs/USAGE.md) and [installation guide](docs/INSTALLATION.md) for details. The source code is available under the [MIT license](LICENSE).
+Installation may ask for an administrator password. See the [usage guide](docs/USAGE.md) and [installation guide](docs/INSTALLATION.md) for details. The source code is available under the [MIT license](LICENSE).

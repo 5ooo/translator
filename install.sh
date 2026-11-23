@@ -67,4 +67,4 @@ fi
 "$project_dir/bin/python" "$project_dir/scripts/install-plamo.py"
 "$project_dir/bin/ts" --check --model argos
 "$project_dir/bin/ts" --check --model plamo
-printf '\n安装完成。请确保 ~/.local/bin 在 PATH 中；无需激活 Python 环境。\n'
+printf '\n安装完成，无需激活 Python 环境，可直接运行 ts。\n'
