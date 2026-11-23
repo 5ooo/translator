@@ -163,3 +163,18 @@ def test_image_failure_leaves_stdout_empty(failure, image_cli, monkeypatch, caps
     assert output.out == ''
     assert expected in output.err
     assert state['ocr_calls'] == 1
+
+
+def test_resident_image_uses_host_ocr_once_and_shows_original(image_cli, monkeypatch, capsys):
+    path, state = image_cli
+    state['ocr_text'] = 'Hello\n你好\n'
+    calls = []
+    monkeypatch.setattr(cli, 'read_service_config', lambda: {'instance':'test'})
+    def request(_config, operation, **kwargs):
+        calls.append((operation, kwargs))
+        return {'text':'你好\nHello\n'}
+    monkeypatch.setattr(cli, 'request', request)
+    assert cli.main(['--image', str(path)]) == 0
+    assert capsys.readouterr().out == '原文：\nHello\n你好\n\n译文：\n你好\nHello\n'
+    assert state['ocr_calls'] == 1
+    assert calls[0][1]['text'] == 'Hello\n你好\n'

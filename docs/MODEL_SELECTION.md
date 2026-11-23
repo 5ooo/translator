@@ -34,4 +34,4 @@ ts --check --model plamo
 
 模型默认位于 `.runtime/data/ts/models/plamo3/`。设置 `XDG_DATA_HOME` 时优先查找其 `ts/models/plamo3/`，找不到再查项目目录；`TS_PLAMO_MODEL` 可显式指定文件。`TS_PLAMO_RUNNER` 可指定本地 `llama-server`。默认优先尝试已安装的 Vulkan 运行器，启动失败时尝试 CPU；设置 `TS_PLAMO_DEVICE=cpu` 仅用 CPU。
 
-需要翻译时，PLaMo 会启动本地进程并加载模型，结束后关闭；语言识别也不会跨命令复用。因此短句的等待时间可能高于 Argos。模型和进程均不调用外部翻译服务。
+本地模式每次翻译都启动 PLaMo 进程并在结束后关闭，语言识别也不会跨命令复用。可选 Docker 常驻模式会预热安装时选中的模型和语言识别器，其他模型或方向首次使用后也会保留；具体设备取决于容器能否访问显卡。模型和进程均不调用外部翻译服务。

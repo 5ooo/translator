@@ -9,6 +9,7 @@ from .inputs import read_input
 from .model_picker import ModelOption, choose_model
 from .models import MODELS, available, default_model, open_translator, resolve_model, set_default
 from .presentation import Presenter
+from .resident import read_service_config, request
 from .text import translate_text
 
 
@@ -50,18 +51,34 @@ def main(argv=None):
         selected = resolve_model(args.model)
         if args.check:
             ok, messages = check() if selected == 'argos' else check(selected)
+            config = read_service_config()
+            if config is not None:
+                try:
+                    request(config, 'ping', timeout=3)
+                    messages.append('Docker 常驻服务: 可用')
+                except TsError as exc:
+                    messages.append(f'Docker 常驻服务: 不可用（{exc}）')
+                    ok = False
             print('\n'.join(messages))
             return 0 if ok else 1
         with Presenter(sys.stdout, sys.stderr, plain=args.plain) as ui:
             source = read_input(args.input, args.text, args.image, sys.stdin, on_stage=ui.stage)
-            with open_translator(selected, on_stage=ui.stage) as engine:
-                detector = Detector()
+            config = read_service_config()
+            if config is not None:
+                ui.stage(Stage.TRANSLATE)
+                result = request(config, 'translate', model=selected, text=source.text,
+                                 wait_if_starting=True).get('text')
+                if not isinstance(result, str) or not result.strip():
+                    raise TsError('Docker 常驻服务返回了空译文。')
+            else:
+                with open_translator(selected, on_stage=ui.stage) as engine:
+                    detector = Detector()
 
-                def detect(text):
-                    ui.stage(Stage.DETECT)
-                    return detector(text)
+                    def detect(text):
+                        ui.stage(Stage.DETECT)
+                        return detector(text)
 
-                result = translate_text(source.text, detect, engine.translate)
+                    result = translate_text(source.text, detect, engine.translate)
             ui.result(source, result)
         return 0
     except TsError as exc:

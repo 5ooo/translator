@@ -30,4 +30,6 @@ cd translator
 ./install.sh
 ```
 
+使用 Docker 常驻服务可让后续翻译快很多。请先安装并启动 Docker，然后运行 `./install.sh --docker`。
+
 安装时可能需要输入管理员密码。更多用法和环境要求见[使用说明](docs/USAGE.md)和[安装说明](docs/INSTALLATION.md)。项目源码采用 [MIT 许可证](LICENSE)。

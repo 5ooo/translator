@@ -238,3 +238,65 @@ def test_installer_does_not_overwrite_existing_uv_file(installation, tmp_path):
     assert '未覆盖' in result.stderr
     assert target.read_text() == 'user data'
     assert not (project / '.venv-uv').exists()
+
+
+def test_installer_docker_option_provisions_resident_service(installation):
+    project, env = installation
+    docker = Path(env['PATH'].split(os.pathsep)[0]) / 'docker'
+    docker.write_text('#!/bin/sh\nexit 0\n')
+    docker.chmod(0o755)
+    subprocess.run([str(project / 'install.sh'), '--docker'], env=env, check=True, capture_output=True)
+    assert str(project / 'scripts/install-docker.py') + ' install' in Path(env['TS_TEST_PLAMO']).read_text()
+
+
+def test_installer_rejects_docker_mode_if_daemon_unavailable(installation):
+    project, env = installation
+    docker = Path(env['PATH'].split(os.pathsep)[0]) / 'docker'
+    docker.write_text('#!/bin/sh\nexit 1\n')
+    docker.chmod(0o755)
+    result = subprocess.run([str(project / 'install.sh'), '--docker'], env=env, capture_output=True, text=True)
+    assert result.returncode == 1
+    assert 'Docker 不可用' in result.stderr
+    assert not (project / '.venv-uv').exists()
+
+
+def test_installer_local_option_disables_resident_service(installation):
+    project, env = installation
+    python = project / '.venv-uv/bin/python'
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\nexit 0\n')
+    python.chmod(0o755)
+    subprocess.run([str(project / 'install.sh'), '--local'], env=env, check=True, capture_output=True)
+    assert str(project / 'scripts/install-docker.py') + ' disable' in Path(env['TS_TEST_PLAMO']).read_text()
+    assert not Path(env['TS_TEST_LOG']).exists()
+
+
+def test_docker_installer_reuses_complete_python_environment_without_network(installation):
+    project, env = installation
+    python = project / '.venv-uv/bin/python'
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\nexit 0\n')
+    python.chmod(0o755)
+    tools = Path(env['PATH'].split(os.pathsep)[0])
+    docker = tools / 'docker'
+    docker.write_text('#!/bin/sh\nexit 0\n')
+    docker.chmod(0o755)
+    uv = tools / 'uv'
+    text = uv.read_text()
+    text = text.replace("elif args[:2] != ['pip', 'install']:",
+                        "elif args[:2] == ['pip', 'install']:\n    sys.exit(17)\nelif args[:2] != ['pip', 'install']:")
+    uv.write_text(text)
+    result = subprocess.run([str(project / 'install.sh'), '--docker'], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert str(project / 'scripts/install-docker.py') + ' install' in Path(env['TS_TEST_PLAMO']).read_text()
+    assert not Path(env['TS_TEST_LOG']).exists()
+
+
+def test_incomplete_python_environment_still_installs_dependencies(installation):
+    project, env = installation
+    python = project / '.venv-uv/bin/python'
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\ncase "$1" in *check-python-deps.py) exit 1;; esac\nexit 0\n')
+    python.chmod(0o755)
+    subprocess.run([str(project / 'install.sh')], env=env, check=True, capture_output=True)
+    assert any(entry['args'][:2] == ['pip', 'install'] for entry in calls(env))
