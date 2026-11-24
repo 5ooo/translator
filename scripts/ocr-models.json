@@ -1,0 +1,12 @@
+[
+  {
+    "filename": "PP-OCRv6_det_tiny.onnx",
+    "sha256": "f42c0fbd294d95eac1a550e131b277dac97462c8025fa4b6c3cec1b7894bd3d5",
+    "urls": ["https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/det/PP-OCRv6_det_tiny.onnx"]
+  },
+  {
+    "filename": "PP-OCRv6_rec_tiny.onnx",
+    "sha256": "e16e242de5937ad92609223f19bc2aff3727ee40b095f996907c24749bad251b",
+    "urls": ["https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/rec/PP-OCRv6_rec_tiny.onnx"]
+  }
+]

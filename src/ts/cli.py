@@ -61,9 +61,18 @@ def main(argv=None):
                     ok = False
             print('\n'.join(messages))
             return 0 if ok else 1
+        config = read_service_config()
         with Presenter(sys.stdout, sys.stderr, plain=args.plain) as ui:
-            source = read_input(args.input, args.text, args.image, sys.stdin, on_stage=ui.stage)
-            config = read_service_config()
+            def resident_ocr(data, _variant):
+                value = request(config, 'ocr', model=selected, image=data, wait_if_starting=True).get('text')
+                if not isinstance(value, str) or not value.strip():
+                    raise TsError('Docker 常驻服务返回了空的 OCR 原文。')
+                return value
+
+            source = read_input(args.input, args.text, args.image, sys.stdin,
+                                ocr_variant=MODELS[selected].ocr_variant,
+                                ocr_backend=resident_ocr if config is not None else None,
+                                on_stage=ui.stage)
             if config is not None:
                 ui.stage(Stage.TRANSLATE)
                 result = request(config, 'translate', model=selected, text=source.text,

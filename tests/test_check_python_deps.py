@@ -37,6 +37,9 @@ test = ["sample-test>=2,<3"]
     project_metadata = dist(packages, 'ts-check-example', '0.1.0', direct={
         'url': project.as_uri(), 'dir_info': {'editable': True},
     })
+    with (project_metadata / 'METADATA').open('a') as file:
+        file.write('Requires-Dist: sample-dep>=1,<2\n')
+        file.write('Requires-Dist: sample-test>=2,<3; extra == "test"\n')
     dist(packages, 'sample-dep', '1.5')
     dist(packages, 'sample-test', '2.3')
     env = os.environ.copy()
@@ -70,6 +73,13 @@ def test_changed_project_requirements_require_install(environment):
     project, _, env = environment
     config = project / 'pyproject.toml'
     config.write_text(config.read_text().replace('sample-dep>=1,<2', 'sample-dep>=2,<3'))
+    assert check(project, env).returncode != 0
+
+
+def test_stale_project_metadata_requires_install(environment):
+    project, metadata, env = environment
+    path = metadata / 'METADATA'
+    path.write_text(path.read_text().replace('Requires-Dist: sample-dep>=1,<2\n', ''))
     assert check(project, env).returncode != 0
 
 

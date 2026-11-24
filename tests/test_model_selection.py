@@ -235,6 +235,70 @@ def test_model_choice_preserves_image_original(fake_translation, monkeypatch, ca
     assert capsys.readouterr().out == '原文：\nHello\n\n译文：\nplamo-result\n'
 
 
+@pytest.mark.parametrize(('name', 'variant'), [('argos', 'tiny'), ('plamo', 'small')])
+@pytest.mark.parametrize('route', ['explicit', 'positional', 'stdin', 'x11', 'wayland'])
+def test_selected_mode_controls_both_ocr_and_translation(
+        name, variant, route, fake_translation, tmp_path, monkeypatch, capsys):
+    class Tty(io.StringIO):
+        def isatty(self):
+            return True
+
+    path = tmp_path / 'image.png'
+    path.write_bytes(b'image data')
+    seen = []
+    monkeypatch.setattr(inputs, 'recognize', lambda data, selected: seen.append((data, selected)) or 'Hello')
+    monkeypatch.delenv('DISPLAY', raising=False)
+    monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
+    monkeypatch.setattr(cli.sys, 'stdin', Tty())
+    args = ['--model', name]
+    if route == 'explicit':
+        args += ['--image', str(path)]
+    elif route == 'positional':
+        args += [str(path)]
+    elif route == 'stdin':
+        monkeypatch.setattr(cli.sys, 'stdin', io.StringIO(str(path)))
+    else:
+        monkeypatch.setenv('DISPLAY' if route == 'x11' else 'WAYLAND_DISPLAY', ':test')
+        monkeypatch.setattr(inputs.shutil, 'which', lambda tool: tool)
+        replies = iter([b'image/png\n', b'image data'])
+        monkeypatch.setattr(inputs, 'run', lambda *args, **kwargs: next(replies))
+    assert cli.main(args) == 0
+    assert seen == [(b'image data', variant)]
+    assert ('translate', name, 'Hello', 'en', 'zh') in fake_translation
+    assert f'{name}-result' in capsys.readouterr().out
+
+
+def test_saved_mode_and_override_select_matching_ocr(fake_translation, tmp_path, monkeypatch, capsys):
+    path = models.config_path()
+    path.parent.mkdir(parents=True)
+    path.write_text('{"model":"plamo"}', encoding='utf-8')
+    image = tmp_path / 'image.png'
+    image.write_bytes(b'image data')
+    seen = []
+    monkeypatch.setattr(inputs, 'recognize', lambda data, variant: seen.append(variant) or 'Hello')
+    assert cli.main(['--image', str(image)]) == 0
+    assert cli.main(['--model', 'argos', '--image', str(image)]) == 0
+    assert seen == ['small', 'tiny']
+    assert models.default_model() == 'plamo'
+    capsys.readouterr()
+
+
+@pytest.mark.parametrize(('name', 'variant'), [('argos', 'tiny'), ('plamo', 'small')])
+def test_mode_is_unavailable_if_its_ocr_model_is_missing(name, variant, tmp_path, monkeypatch):
+    from ts import ocr
+    (tmp_path / 'model').mkdir()
+    package = SimpleNamespace(type='translate', from_code='en', to_code='zh',
+                              tokenizer=object(), package_path=tmp_path)
+    reverse = SimpleNamespace(type='translate', from_code='zh', to_code='en',
+                              tokenizer=object(), package_path=tmp_path)
+    module = SimpleNamespace(local_packages=lambda: [package, reverse], available=lambda: (True, 'ready'))
+    monkeypatch.setattr(models, '_module', lambda name: module)
+    monkeypatch.setattr(ocr, 'available', lambda selected: (False, f'{selected} 缺失'))
+    assert models.available(name) == (False, f'{variant} 缺失')
+    with pytest.raises(TsError, match=f'{variant} 缺失'):
+        models.set_default(name)
+
+
 @pytest.mark.parametrize('args', [
     ['--model', 'unknown'], ['--set-model', 'unknown'],
     ['--model', 'qwen'], ['--model', 'm2m'], ['--set-model', 'qwen'], ['--set-model', 'm2m'],

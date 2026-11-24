@@ -39,11 +39,8 @@ fi
 
 export PATH="$project_dir/.runtime/system/usr/bin:$PATH"
 export LD_LIBRARY_PATH="$project_dir/.runtime/system/usr/lib/x86_64-linux-gnu${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-if [[ -d "$project_dir/.runtime/system/usr/share/tesseract-ocr/5/tessdata" ]]; then
-    export TESSDATA_PREFIX="${TESSDATA_PREFIX:-$project_dir/.runtime/system/usr/share/tesseract-ocr/5/tessdata}"
-fi
 missing_native=false
-for tool in tesseract wl-paste xclip; do
+for tool in wl-paste xclip; do
     if command -v "$tool" >/dev/null 2>&1; then
         printf '%s：可用\n' "$tool"
     else
@@ -51,19 +48,9 @@ for tool in tesseract wl-paste xclip; do
         missing_native=true
     fi
 done
-if command -v tesseract >/dev/null 2>&1; then
-    if langs="$(tesseract --list-langs 2>/dev/null)" && \
-       [[ " $langs " =~ (^|[[:space:]])eng($|[[:space:]]) ]] && \
-       [[ " $langs " =~ (^|[[:space:]])chi_sim($|[[:space:]]) ]]; then
-        printf 'Tesseract eng+chi_sim：可用\n'
-    else
-        printf 'Tesseract eng+chi_sim：未找到或不可用\n'
-        missing_native=true
-    fi
-fi
 if [[ "$missing_native" == true ]]; then
     if command -v apt-get >/dev/null 2>&1 && command -v dpkg-deb >/dev/null 2>&1; then
-        printf '安装脚本可尝试下载缺失的系统工具和语言包。\n'
+        printf '安装脚本可尝试下载缺失的剪贴板工具。\n'
     else
         printf '缺少系统工具，且无法使用 apt-get/dpkg-deb 自动安装。\n' >&2
         exit 1

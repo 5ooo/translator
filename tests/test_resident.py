@@ -1,4 +1,5 @@
 import contextlib
+import hashlib
 import json
 import multiprocessing
 import os
@@ -16,13 +17,21 @@ from ts.errors import TsError
 class FakeRuntime:
     def __init__(self):
         self.engines = {}
+        self.ocr_engines = {}
+        self.ocr_ready = set()
 
     def warm(self, model):
         self.engines[model] = True
+        self.ocr_ready.add(resident.MODELS[model].ocr_variant)
 
     def translate(self, text, model):
         self.engines[model] = True
         return f'{model}:{text}'
+
+    def ocr(self, data, model):
+        self.ocr_engines[resident.MODELS[model].ocr_variant] = True
+        self.ocr_ready.add(resident.MODELS[model].ocr_variant)
+        return f'{model}:{hashlib.sha256(data).hexdigest()}'
 
     def close(self):
         pass
@@ -43,7 +52,7 @@ def running_service(tmp_path, monkeypatch):
     monkeypatch.setattr(resident, 'source_digest', lambda *_: 'b' * 64)
     monkeypatch.setattr(resident, 'host_bindings', lambda: {'model': '/model'})
     monkeypatch.setattr(resident, 'Runtime', FakeRuntime)
-    config = {'protocol': 1, 'root': str(tmp_path), 'instance': instance, 'source_digest': 'b' * 64}
+    config = {'protocol': resident.PROTOCOL, 'root': str(tmp_path), 'instance': instance, 'source_digest': 'b' * 64}
     process = multiprocessing.get_context('spawn').Process(
         target=serve_fake, args=(directory / 'service.sock', instance))
     process.start()
@@ -69,6 +78,29 @@ def test_service_reuses_models_and_preserves_per_request_selection(running_servi
     assert resident.request(config, 'translate', model='plamo', text='Hello')['text'] == 'plamo:Hello'
     assert resident.request(config, 'translate', model='argos', text='你好')['text'] == 'argos:你好'
     assert resident.request(config, 'ping')['loaded'] == ['argos', 'plamo']
+
+
+def test_service_receives_binary_image_and_retains_both_ocr_models(running_service):
+    config, _ = running_service
+    image = b'\x89PNG\r\n\0\xff\n' + b'image content' * 5000
+    digest = hashlib.sha256(image).hexdigest()
+    assert resident.request(config, 'ocr', model='argos', image=image)['text'] == f'argos:{digest}'
+    assert resident.request(config, 'ocr', model='plamo', image=image)['text'] == f'plamo:{digest}'
+    assert resident.request(config, 'ocr', model='argos', image=image)['text'] == f'argos:{digest}'
+    assert resident.request(config, 'ping')['ocr_loaded'] == ['small', 'tiny']
+
+
+def test_service_rejects_ocr_request_with_unknown_mode(running_service):
+    config, _ = running_service
+    with pytest.raises(TsError, match='无效.*OCR'):
+        resident.request(config, 'ocr', model='unknown', image=b'image')
+
+
+def test_service_receives_image_larger_than_text_message_limit(running_service):
+    config, _ = running_service
+    image = b'\0\n\xff' * (6 * 1024 * 1024)
+    digest = hashlib.sha256(image).hexdigest()
+    assert resident.request(config, 'ocr', model='argos', image=image)['text'] == f'argos:{digest}'
 
 
 def test_concurrent_requests_are_isolated(running_service):
@@ -117,7 +149,7 @@ def test_service_config_rejects_moved_or_changed_project(tmp_path, monkeypatch):
     monkeypatch.setattr(resident, 'source_digest', lambda *_: 'b' * 64)
     monkeypatch.setattr(resident, 'host_bindings', lambda: {'model': '/model'})
     path = config_file.with_name('resident.json')
-    config = {'protocol': 1, 'instance': 'a'*32, 'root': str(tmp_path), 'source_digest':'b'*64,
+    config = {'protocol': resident.PROTOCOL, 'instance': 'a'*32, 'root': str(tmp_path), 'source_digest':'b'*64,
               'host_bindings': {'model': '/model'}}
     path.write_text(json.dumps(config))
     assert resident.read_service_config() == config
@@ -153,6 +185,54 @@ def test_runtime_caches_detector_and_each_engine(monkeypatch):
     finally:
         runtime.close()
     assert set(closed) == {'plamo', 'argos'}
+
+
+def test_runtime_caches_ocr_engines_per_mode(monkeypatch):
+    opened = []
+
+    class FakeOCR:
+        def __init__(self, variant):
+            self.variant = variant
+            opened.append(variant)
+
+        def recognize(self, data):
+            return f'{self.variant}:{data.decode()}'
+
+    monkeypatch.setattr(resident, 'OCREngine', FakeOCR)
+    runtime = resident.Runtime()
+    try:
+        assert runtime.ocr(b'first', 'argos') == 'tiny:first'
+        assert runtime.ocr(b'second', 'argos') == 'tiny:second'
+        assert runtime.ocr(b'third', 'plamo') == 'small:third'
+        assert runtime.ocr(b'fourth', 'argos') == 'tiny:fourth'
+        assert opened == ['tiny', 'small']
+    finally:
+        runtime.close()
+
+
+def test_runtime_keeps_ocr_engine_after_image_without_text(monkeypatch):
+    created = []
+
+    class FakeOCR:
+        def __init__(self, variant):
+            created.append(variant)
+
+        def recognize(self, data):
+            if data == b'empty':
+                raise TsError('图片中没有识别出文字。')
+            return 'recognized'
+
+    monkeypatch.setattr(resident, 'OCREngine', FakeOCR)
+    runtime = resident.Runtime()
+    try:
+        with pytest.raises(TsError, match='没有识别出文字'):
+            runtime.ocr(b'empty', 'argos')
+        assert runtime.ocr_ready == set()
+        assert runtime.ocr(b'valid', 'argos') == 'recognized'
+        assert runtime.ocr_ready == {'tiny'}
+        assert created == ['tiny']
+    finally:
+        runtime.close()
 
 
 def test_cli_sends_complete_text_and_selected_model(monkeypatch, capsys):

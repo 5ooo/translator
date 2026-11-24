@@ -64,18 +64,21 @@ def image_cli(tmp_path, monkeypatch):
     Image.new('RGB', (20, 20), 'white').save(path)
     state = {'ocr_text': '  Hello\n你好  \n', 'ocr_calls': 0, 'clipboard_type': 'image/png'}
 
+    def recognize(data, variant):
+        state['ocr_calls'] += 1
+        state['ocr_variant'] = variant
+        assert data.startswith(b'\x89PNG')
+        if not state['ocr_text'].strip():
+            raise TsError('图片中没有识别出文字')
+        return state['ocr_text']
+
     def run(args, **kwargs):
-        if args[0] == 'tesseract':
-            if '--list-langs' in args:
-                return b'eng\nchi_sim\n'
-            state['ocr_calls'] += 1
-            assert kwargs['data'].startswith(b'\x89PNG')
-            return state['ocr_text'].encode('utf-8')
         if '--list-types' in args or args[-1] == 'TARGETS':
             return (state['clipboard_type'] + '\n').encode()
         return path.read_bytes() if state['clipboard_type'] == 'image/png' else str(path).encode()
 
     monkeypatch.setattr(inputs, 'run', run)
+    monkeypatch.setattr(inputs, 'recognize', recognize)
     monkeypatch.setattr(inputs.shutil, 'which', lambda tool: tool)
     monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
     monkeypatch.delenv('DISPLAY', raising=False)
@@ -113,6 +116,7 @@ def test_image_routes_show_original_and_translation(route, ending, image_cli, mo
                           + translation + ('' if ending else '\n'))
     assert output.err == ''
     assert state['ocr_calls'] == 1
+    assert state['ocr_variant'] == 'tiny'
 
 
 @pytest.mark.parametrize(('route', 'ending'), [
@@ -165,16 +169,39 @@ def test_image_failure_leaves_stdout_empty(failure, image_cli, monkeypatch, caps
     assert state['ocr_calls'] == 1
 
 
-def test_resident_image_uses_host_ocr_once_and_shows_original(image_cli, monkeypatch, capsys):
+@pytest.mark.parametrize('model', ['argos', 'plamo'])
+def test_resident_image_uses_container_ocr_once_and_shows_original(model, image_cli, monkeypatch, capsys):
     path, state = image_cli
     state['ocr_text'] = 'Hello\n你好\n'
     calls = []
     monkeypatch.setattr(cli, 'read_service_config', lambda: {'instance':'test'})
     def request(_config, operation, **kwargs):
         calls.append((operation, kwargs))
+        if operation == 'ocr':
+            return {'text': state['ocr_text']}
         return {'text':'你好\nHello\n'}
     monkeypatch.setattr(cli, 'request', request)
-    assert cli.main(['--image', str(path)]) == 0
+    assert cli.main(['--model', model, '--image', str(path)]) == 0
     assert capsys.readouterr().out == '原文：\nHello\n你好\n\n译文：\n你好\nHello\n'
-    assert state['ocr_calls'] == 1
-    assert calls[0][1]['text'] == 'Hello\n你好\n'
+    assert state['ocr_calls'] == 0
+    assert calls[0][0] == 'ocr'
+    assert calls[0][1]['image'] == path.read_bytes()
+    assert calls[0][1]['model'] == model
+    assert calls[1][0] == 'translate'
+    assert calls[1][1]['model'] == model
+    assert calls[1][1]['text'] == 'Hello\n你好\n'
+
+
+def test_resident_image_failure_never_falls_back_to_host_ocr(image_cli, monkeypatch, capsys):
+    path, state = image_cli
+    monkeypatch.setattr(cli, 'read_service_config', lambda: {'instance': 'test'})
+
+    def fail(*args, **kwargs):
+        raise TsError('Docker 常驻服务不可用')
+
+    monkeypatch.setattr(cli, 'request', fail)
+    assert cli.main(['--image', str(path)]) == 1
+    captured = capsys.readouterr()
+    assert not captured.out
+    assert 'Docker 常驻服务不可用' in captured.err
+    assert state['ocr_calls'] == 0

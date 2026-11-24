@@ -1,8 +1,9 @@
-"""Private, offline translation service used by the optional Docker mode."""
+"""Private, offline OCR and translation service used by Docker mode."""
 import argparse
 from contextlib import ExitStack, contextmanager
 import errno
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -18,10 +19,11 @@ import time
 from .engine import Detector
 from .errors import TsError
 from .models import MODELS, config_path, open_translator
+from .ocr import OCREngine, model_files
 from .text import translate_text
 
 ROOT = Path(__file__).resolve().parents[2]
-PROTOCOL = 1
+PROTOCOL = 2
 MAX_MESSAGE = 16 * 1024 * 1024
 INSTANCE = re.compile(r'^[a-f0-9]{32}$')
 CONTAINER_ID = re.compile(r'^[a-f0-9]{12,64}$')
@@ -50,6 +52,7 @@ def host_bindings():
     return {
         'packages': str(Path(packages).expanduser().resolve()),
         'model': str(_model_file().resolve()),
+        'ocr': str(model_files('tiny')[0].parent.resolve()),
         'runner': str(Path(runner).expanduser().resolve()) if runner else None,
         'device': os.environ.get('TS_PLAMO_DEVICE', 'auto').strip().lower(),
     }
@@ -139,13 +142,36 @@ def _receive(conn):
     return value
 
 
-def _request_once(config, operation, *, model=None, text=None, timeout=None):
+def _receive_image(conn, size):
+    data = bytearray()
+    while len(data) < size:
+        chunk = conn.recv(min(65536, size - len(data)))
+        if not chunk:
+            raise TsError('Docker 常驻服务收到不完整的图片。')
+        data.extend(chunk)
+    return bytes(data)
+
+
+def _check_answer(config, answer):
+    if answer.get('protocol') != PROTOCOL or answer.get('instance') != config['instance']:
+        raise TsError('Docker 常驻服务版本或身份不符；请运行 ./install.sh --docker 更新。')
+    if answer.get('ok') is not True:
+        message = answer.get('error')
+        raise TsError(message if isinstance(message, str) and message else 'Docker 常驻服务处理失败。')
+    return answer
+
+
+def _request_once(config, operation, *, model=None, text=None, image=None, timeout=None):
     path = socket_path(config)
     _validate_socket_directory(path)
     payload = {'protocol': PROTOCOL, 'instance': config['instance'],
                'source_digest': config['source_digest'], 'operation': operation}
     if operation == 'translate':
         payload.update(model=model, text=text)
+    elif operation == 'ocr':
+        if not isinstance(image, bytes):
+            raise TsError('图片数据无效。')
+        payload.update(model=model, image_size=len(image))
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
             conn.settimeout(3.0)
@@ -158,15 +184,15 @@ def _request_once(config, operation, *, model=None, text=None, timeout=None):
                 raise TsError('Docker 常驻服务的用户身份不符，已拒绝连接。')
             conn.settimeout(timeout)
             _send(conn, payload)
+            if operation == 'ocr':
+                ready = _check_answer(config, _receive(conn))
+                if ready.get('ready') is not True:
+                    raise TsError('Docker 常驻服务未准备好接收图片。')
+                conn.sendall(image)
             answer = _receive(conn)
     except (OSError, TimeoutError) as exc:
         raise TsError('Docker 常驻服务连接中断，请检查服务后重试。') from exc
-    if answer.get('protocol') != PROTOCOL or answer.get('instance') != config['instance']:
-        raise TsError('Docker 常驻服务版本或身份不符；请运行 ./install.sh --docker 更新。')
-    if answer.get('ok') is not True:
-        message = answer.get('error')
-        raise TsError(message if isinstance(message, str) and message else 'Docker 常驻服务处理失败。')
-    return answer
+    return _check_answer(config, answer)
 
 
 def _container_running(config):
@@ -183,9 +209,9 @@ def _container_running(config):
     return result.returncode == 0 and result.stdout.strip() == f'true {instance}'
 
 
-def request(config, operation, *, model=None, text=None, timeout=None, wait_if_starting=False):
+def request(config, operation, *, model=None, text=None, image=None, timeout=None, wait_if_starting=False):
     try:
-        return _request_once(config, operation, model=model, text=text, timeout=timeout)
+        return _request_once(config, operation, model=model, text=text, image=image, timeout=timeout)
     except ServiceUnavailable as exc:
         if not wait_if_starting or not _container_running(config):
             raise
@@ -195,7 +221,7 @@ def request(config, operation, *, model=None, text=None, timeout=None, wait_if_s
     while time.monotonic() < deadline:
         time.sleep(.25)
         try:
-            return _request_once(config, operation, model=model, text=text, timeout=timeout)
+            return _request_once(config, operation, model=model, text=text, image=image, timeout=timeout)
         except ServiceUnavailable as exc:
             last = exc
             if time.monotonic() >= check_at:
@@ -209,7 +235,21 @@ class Runtime:
     def __init__(self):
         self.detector = Detector()
         self.engines = {}
+        self.ocr_engines = {}
+        self.ocr_ready = set()
         self.stack = ExitStack()
+
+    def ocr(self, data, model):
+        if model not in MODELS:
+            raise TsError('未知 OCR 模式。')
+        variant = MODELS[model].ocr_variant
+        engine = self.ocr_engines.get(variant)
+        if engine is None:
+            engine = OCREngine(variant)
+            self.ocr_engines[variant] = engine
+        text = engine.recognize(data)
+        self.ocr_ready.add(variant)
+        return text
 
     def translate(self, text, model):
         if model not in MODELS:
@@ -222,6 +262,14 @@ class Runtime:
         value = self.translate('The network is ready.', model)
         if not value.strip():
             raise TsError('Docker 常驻服务预热未得到译文。')
+        from PIL import Image, ImageDraw, ImageFont
+        with Image.new('RGB', (180, 25), 'white') as image:
+            ImageDraw.Draw(image).text((4, 4), 'Hello world', fill='black', font=ImageFont.load_default())
+            with image.resize((900, 125)) as enlarged:
+                data = io.BytesIO()
+                enlarged.save(data, format='PNG')
+        if not self.ocr(data.getvalue(), model).strip():
+            raise TsError('Docker 常驻服务预热未得到 OCR 文字。')
 
     def close(self):
         self.stack.close()
@@ -284,12 +332,21 @@ def serve(path, instance, model):
                         raise TsError('Docker 常驻服务版本或身份不符。')
                     operation = payload.get('operation')
                     if operation == 'ping':
-                        value = {'ready': True, 'loaded': sorted(runtime.engines)}
+                        value = {'ready': True, 'loaded': sorted(runtime.engines),
+                                 'ocr_loaded': sorted(runtime.ocr_ready)}
                     elif operation == 'translate':
                         text, selected = payload.get('text'), payload.get('model')
                         if not isinstance(text, str) or not text.strip() or selected not in MODELS:
                             raise TsError('Docker 常驻服务收到无效翻译请求。')
                         value = {'text': runtime.translate(text, selected)}
+                    elif operation == 'ocr':
+                        selected, size = payload.get('model'), payload.get('image_size')
+                        if selected not in MODELS or isinstance(size, bool) or not isinstance(size, int) or size < 0:
+                            raise TsError('Docker 常驻服务收到无效 OCR 请求。')
+                        _send(conn, {'protocol': PROTOCOL, 'instance': instance, 'ok': True, 'ready': True})
+                        conn.settimeout(120.0)
+                        image = _receive_image(conn, size)
+                        value = {'text': runtime.ocr(image, selected)}
                     else:
                         raise TsError('Docker 常驻服务收到未知请求。')
                     answer = {'protocol': PROTOCOL, 'instance': instance, 'ok': True, **value}

@@ -14,11 +14,12 @@ class ModelSpec:
     title: str
     module: str
     factory: str
+    ocr_variant: str
 
 
 MODELS = {
-    'argos': ModelSpec('速度优先', 'engine', 'ArgosEngine'),
-    'plamo': ModelSpec('效果优先', 'plamo', 'PlamoEngine'),
+    'argos': ModelSpec('速度优先', 'engine', 'ArgosEngine', 'tiny'),
+    'plamo': ModelSpec('效果优先', 'plamo', 'PlamoEngine', 'small'),
 }
 DEFAULT_MODEL = 'argos'
 
@@ -81,10 +82,13 @@ def resolve_model(explicit=None):
 
 
 def available(name):
+    from .ocr import available as ocr_available
+
     try:
         module = _module(name)
         if name != 'argos':
-            return module.available()
+            ready, detail = module.available()
+            return ocr_available(_spec(name).ocr_variant) if ready else (ready, detail)
     except TsError as exc:
         return False, str(exc)
     try:
@@ -97,7 +101,7 @@ def available(name):
     if missing:
         pairs_text = '、'.join(f'{source}→{target}' for source, target in sorted(missing))
         return False, f'缺少本地 {pairs_text} 模型；请在项目目录运行 ./install.sh 联网安装。'
-    return True, '中英双向模型已安装'
+    return ocr_available(_spec(name).ocr_variant)
 
 
 def set_default(name):

@@ -13,6 +13,7 @@ def ready(root):
         import tomllib
         from packaging.requirements import Requirement
         from packaging.specifiers import SpecifierSet
+        from packaging.utils import canonicalize_name
 
         project = tomllib.loads((root / 'pyproject.toml').read_text(encoding='utf-8'))['project']
         distribution = importlib.metadata.distribution(project['name'])
@@ -37,11 +38,21 @@ def ready(root):
 
         groups = [(project.get('dependencies', []), ''),
                   (project.get('optional-dependencies', {}).get('test', []), 'test')]
+        installed_requirements = [Requirement(raw) for raw in distribution.requires or []]
         for dependencies, extra in groups:
             for raw in dependencies:
                 requirement = Requirement(raw)
                 if requirement.marker and not requirement.marker.evaluate({'extra': extra}):
                     continue
+                if not any(
+                    canonicalize_name(installed.name) == canonicalize_name(requirement.name)
+                    and installed.specifier == requirement.specifier
+                    and installed.extras == requirement.extras
+                    and installed.url == requirement.url
+                    and (installed.marker is None or installed.marker.evaluate({'extra': extra}))
+                    for installed in installed_requirements
+                ):
+                    return False
                 if requirement.url or not requirement.specifier.contains(
                         importlib.metadata.version(requirement.name), prereleases=True):
                     return False

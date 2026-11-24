@@ -9,9 +9,6 @@ trap 'rm -rf -- "$test_config"' EXIT
 export XDG_CONFIG_HOME="$test_config"
 export XDG_CACHE_HOME="$project_dir/.runtime/cache"
 export ARGOS_PACKAGES_DIR="$project_dir/.runtime/data/argos-translate/packages"
-if [[ -d "$project_dir/.runtime/system/usr/share/tesseract-ocr/5/tessdata" ]]; then
-    export TESSDATA_PREFIX="$project_dir/.runtime/system/usr/share/tesseract-ocr/5/tessdata"
-fi
 export TS_REQUIRE_INTEGRATION=1
 export PYTHONDONTWRITEBYTECODE=1
 "$project_dir/bin/python" -m pytest "$project_dir/tests" -p no:cacheprovider "$@"

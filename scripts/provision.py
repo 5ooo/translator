@@ -14,8 +14,7 @@ RUNTIME = ROOT / '.runtime'
 SYSTEM = RUNTIME / 'system'
 PACKAGES = RUNTIME / 'data/argos-translate/packages'
 SYSTEM_BIN = Path('/usr/local/bin')
-NATIVE_PACKAGES = ('tesseract-ocr', 'tesseract-ocr-eng', 'tesseract-ocr-chi-sim',
-                   'tesseract-ocr-osd', 'wl-clipboard', 'xclip')
+NATIVE_PACKAGES = ('wl-clipboard', 'xclip')
 
 
 def environment():
@@ -24,22 +23,17 @@ def environment():
     for key, directory in [('XDG_DATA_HOME', 'data'), ('XDG_CONFIG_HOME', 'config'), ('XDG_CACHE_HOME', 'cache')]:
         os.environ.setdefault(key, str(RUNTIME / directory))
     os.environ.setdefault('ARGOS_PACKAGES_DIR', str(PACKAGES))
-    if (SYSTEM / 'usr/share/tesseract-ocr/5/tessdata').is_dir():
-        os.environ.setdefault('TESSDATA_PREFIX', str(SYSTEM / 'usr/share/tesseract-ocr/5/tessdata'))
 
 
 def native_ready():
-    if not all(shutil.which(tool) for tool in ('tesseract', 'wl-paste', 'xclip')):
-        return False
-    result = subprocess.run(['tesseract', '--list-langs'], capture_output=True, text=True)
-    return result.returncode == 0 and {'eng', 'chi_sim'}.issubset(result.stdout.split())
+    return all(shutil.which(tool) for tool in ('wl-paste', 'xclip'))
 
 
 def install_native():
     if native_ready():
         return
     if not shutil.which('apt-get') or not shutil.which('dpkg-deb'):
-        raise RuntimeError('当前自动部署支持 Debian/Ubuntu。请先安装 Tesseract eng+chi_sim、wl-clipboard 与 xclip。')
+        raise RuntimeError('当前自动部署支持 Debian/Ubuntu。请先安装 wl-clipboard 与 xclip。')
     SYSTEM.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='ts-packages-') as directory:
         subprocess.run(['apt-get', 'download', *NATIVE_PACKAGES], cwd=directory, check=True)
@@ -50,7 +44,7 @@ def install_native():
         (RUNTIME / 'native-packages.json').write_text(json.dumps(records, indent=2), encoding='utf-8')
     environment()
     if not native_ready():
-        raise RuntimeError('本地系统工具仍不可用。请检查缺少的系统共享库和 Tesseract 语言包。')
+        raise RuntimeError('本地剪贴板工具仍不可用。请检查缺少的系统共享库。')
 
 
 def verified_download(spec):
@@ -63,7 +57,8 @@ def verified_download(spec):
     partial = path.with_suffix('.part')
     for url in spec['urls']:
         try:
-            print(f'下载 {spec["from"]}→{spec["to"]} 本地模型：{url}', flush=True)
+            label = f'{spec["from"]}→{spec["to"]}' if 'from' in spec else spec['filename']
+            print(f'下载 {label} 本地模型：{url}', flush=True)
             with urllib.request.urlopen(url, timeout=60) as source, partial.open('wb') as output:
                 shutil.copyfileobj(source, output)
             if hashlib.sha256(partial.read_bytes()).hexdigest() != spec['sha256']:
@@ -87,6 +82,32 @@ def install_models():
         archive = verified_download(spec)
         package.install_from_path(archive)
         print(f'已安装本地模型 {spec["from"]}→{spec["to"]}', flush=True)
+
+
+def install_ocr_models():
+    directory = RUNTIME / 'data/ts/models/ocr'
+    directory.mkdir(parents=True, exist_ok=True)
+    specs = json.loads((ROOT / 'scripts/ocr-models.json').read_text(encoding='utf-8'))
+    for spec in specs:
+        destination = directory / spec['filename']
+        if destination.exists():
+            if destination.is_file() and hashlib.sha256(destination.read_bytes()).hexdigest() == spec['sha256']:
+                continue
+            raise RuntimeError(f'OCR 模型文件不匹配，未覆盖：{destination}')
+        archive = verified_download(spec)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(dir=directory, prefix='.ocr-', delete=False) as file:
+                temporary = Path(file.name)
+                with archive.open('rb') as source:
+                    shutil.copyfileobj(source, file)
+            os.link(temporary, destination)
+        except FileExistsError as exc:
+            raise RuntimeError(f'OCR 模型文件在安装期间出现，未覆盖：{destination}') from exc
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+        print(f'已安装 OCR 模型 {spec["filename"]}', flush=True)
 
 
 def install_command(command_path=None):
@@ -147,6 +168,7 @@ def main():
     environment()
     install_native()
     install_models()
+    install_ocr_models()
     install_command(command_path)
 
 

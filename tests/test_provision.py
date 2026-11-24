@@ -1,6 +1,7 @@
 import hashlib
 import importlib.util
 import io
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -209,6 +210,7 @@ def test_main_uses_the_calling_shell_path(installation, tmp_path, monkeypatch):
     monkeypatch.setattr(provision, 'SYSTEM', runtime_system)
     monkeypatch.setattr(provision, 'install_native', lambda: None)
     monkeypatch.setattr(provision, 'install_models', lambda: None)
+    monkeypatch.setattr(provision, 'install_ocr_models', lambda: None)
 
     provision.main()
 
@@ -254,3 +256,32 @@ def test_wrong_model_hash_is_rejected_and_partial_removed(installation, monkeypa
         provision.verified_download(model)
     assert not (root / '.runtime/downloads/bad.argosmodel').exists()
     assert not (root / '.runtime/downloads/bad.part').exists()
+
+
+def test_ocr_models_reuse_verified_cache_and_are_idempotent(installation, monkeypatch):
+    root, _ = installation
+    (root / 'scripts').mkdir()
+    value = b'verified ocr weights'
+    spec = {'filename': 'det.onnx', 'sha256': hashlib.sha256(value).hexdigest(),
+            'urls': ['https://example.invalid/det.onnx']}
+    (root / 'scripts/ocr-models.json').write_text(json.dumps([spec]))
+    cache = root / '.runtime/downloads'
+    cache.mkdir(parents=True)
+    (cache / spec['filename']).write_bytes(value)
+    monkeypatch.setattr(provision.urllib.request, 'urlopen', lambda *a, **k: pytest.fail('不应联网'))
+    provision.install_ocr_models()
+    provision.install_ocr_models()
+    assert (root / '.runtime/data/ts/models/ocr/det.onnx').read_bytes() == value
+
+
+def test_ocr_install_does_not_overwrite_unexpected_existing_file(installation):
+    root, _ = installation
+    (root / 'scripts').mkdir()
+    spec = {'filename': 'det.onnx', 'sha256': hashlib.sha256(b'expected').hexdigest(), 'urls': []}
+    (root / 'scripts/ocr-models.json').write_text(json.dumps([spec]))
+    target = root / '.runtime/data/ts/models/ocr/det.onnx'
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b'other content')
+    with pytest.raises(RuntimeError, match='未覆盖'):
+        provision.install_ocr_models()
+    assert target.read_bytes() == b'other content'

@@ -29,6 +29,6 @@ printf './screenshot.png' | ts      # 标准输入中的图片路径
 
 代码、明确命令、URL、路径和常见技术缩写会尽量保留。单独输入的 `grab_box` 会按英文词组翻译；要保留原样，请使用反引号。未知缩写和与中文相邻的路径可能有歧义，也可用反引号标明边界。
 
-运行 `ts --models` 选择默认模式，运行 `ts --model plamo 'Hello world.'` 仅为本次选择 PLaMo。查看[模型选择](MODEL_SELECTION.md)和[命令参考](INTERFACE.md)了解完整选项。
+运行 `ts --models` 选择速度优先或效果优先，选择会同时应用于图片识别和文字翻译。运行 `ts --model plamo 'Hello world.'` 只为本次选择效果优先。查看[模型选择](MODEL_SELECTION.md)和[命令参考](INTERFACE.md)了解完整选项。
 
-安装时可选择 [Docker 常驻模式](INSTALLATION.md#可选docker-常驻模式)，以便跨命令复用语言识别器和模型；翻译命令、剪贴板及图片用法不变。
+安装时可选择 [Docker 常驻模式](INSTALLATION.md#可选docker-常驻模式)，以便跨命令复用 OCR、语言识别器和翻译模型；翻译命令、剪贴板及图片用法不变。

@@ -3,7 +3,6 @@ import shutil
 
 from .errors import TsError
 from .events import Stage, StageObserver, emit
-from .inputs import run
 
 
 class Detector:
@@ -77,14 +76,11 @@ def check(model='argos'):
         present = importlib.util.find_spec(name) is not None
         messages.append(f'{name}: {"已安装" if present else "缺失"}')
         ok &= present
-    try:
-        langs = run(['tesseract', '--list-langs']).decode().split()
-        present = {'eng', 'chi_sim'}.issubset(langs)
-        messages.append(f'Tesseract eng+chi_sim: {"已安装" if present else "缺失语言包"}')
-        ok &= present
-    except TsError as exc:
-        messages.append(str(exc))
-        ok = False
+    from .models import MODELS
+    from .ocr import available as ocr_available
+    present, detail = ocr_available(MODELS[model].ocr_variant)
+    messages.append(f'OCR: {"可用" if present else "不可用"}（{detail}）')
+    ok &= present
     if model == 'argos':
         try:
             pairs = {(p.from_code, p.to_code) for p in local_packages() if p.type == 'translate'
@@ -97,9 +93,9 @@ def check(model='argos'):
             messages.append(str(exc))
             ok = False
     else:
-        from .models import available
+        from .plamo import available
         try:
-            present, detail = available(model)
+            present, detail = available()
             messages.append(f'{model} 模型: {"可用" if present else "不可用"}（{detail}）')
             ok &= present
         except TsError as exc:

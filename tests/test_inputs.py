@@ -95,20 +95,22 @@ def png():
     return data.getvalue()
 
 
-def test_ocr_always_uses_both_languages(monkeypatch):
+@pytest.mark.parametrize('variant', ['tiny', 'small'])
+def test_ocr_uses_selected_variant(monkeypatch, variant):
     calls = []
-    def run(args, **kwargs):
-        calls.append((args, kwargs))
-        return b'List\neng\nchi_sim\n' if '--list-langs' in args else b'Hello\n'
-    monkeypatch.setattr(inputs, 'run', run)
-    assert inputs.ocr(png()) == 'Hello\n'
-    assert calls[-1][0] == ['tesseract', 'stdin', 'stdout', '-l', 'eng+chi_sim']
-    assert calls[-1][1]['data'].startswith(b'\x89PNG')
+    def recognize(data, selected):
+        calls.append((data, selected))
+        return 'Hello\n'
+    monkeypatch.setattr(inputs, 'recognize', recognize)
+    assert inputs.ocr(png(), variant=variant) == 'Hello\n'
+    assert calls == [(png(), variant)]
 
 
-def test_ocr_missing_chinese_model(monkeypatch):
-    monkeypatch.setattr(inputs, 'run', lambda *a, **k: b'eng\n')
-    with pytest.raises(TsError, match='chi_sim'):
+def test_ocr_missing_model_reports_error(monkeypatch):
+    def missing(*args):
+        raise TsError('缺少 OCR 模型')
+    monkeypatch.setattr(inputs, 'recognize', missing)
+    with pytest.raises(TsError, match='缺少 OCR 模型'):
         inputs.ocr(png())
 
 
@@ -129,9 +131,9 @@ def test_tool_errors_are_readable(error, monkeypatch):
 def test_ocr_announces_before_external_work(monkeypatch):
     stages = []
 
-    def run(args, **kwargs):
+    def recognize(data, variant):
         assert stages == [Stage.OCR]
-        return b'eng\nchi_sim\n' if '--list-langs' in args else b'Hello'
+        return 'Hello'
 
-    monkeypatch.setattr(inputs, 'run', run)
+    monkeypatch.setattr(inputs, 'recognize', recognize)
     assert inputs.ocr(png(), on_stage=stages.append) == 'Hello'

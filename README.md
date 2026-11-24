@@ -30,6 +30,6 @@ cd translator
 ./install.sh
 ```
 
-The Docker service can make repeated translations much faster. Install and start Docker, then run `./install.sh --docker`.
+The Docker service keeps image recognition and translation ready for faster repeated use. Install and start Docker, then run `./install.sh --docker`.
 
 Installation may ask for an administrator password. See the [usage guide](docs/USAGE.md) and [installation guide](docs/INSTALLATION.md) for details. The source code is available under the [MIT license](LICENSE).

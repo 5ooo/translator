@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install or disable the optional, project-owned Docker translation service."""
+"""Install or disable the optional, project-owned Docker OCR and translation service."""
 import argparse
 import csv
 import fcntl
@@ -16,9 +16,9 @@ import time
 import uuid
 
 from provision import environment
-from ts import plamo
+from ts import ocr, plamo
 from ts.errors import TsError
-from ts.models import default_model
+from ts.models import MODELS, default_model
 from ts.resident import PROTOCOL, ROOT, host_bindings, request, service_config_path, source_digest
 
 LABEL = 'io.translator.ts.instance'
@@ -54,8 +54,9 @@ def host_paths():
     site = ROOT / '.venv-uv/lib/python3.12/site-packages'
     packages = Path(os.environ['ARGOS_PACKAGES_DIR']).expanduser()
     model = plamo._model_file()
+    ocr_models = ocr.model_files('tiny')[0].parent
     tools = ROOT / '.runtime/tools'
-    for path in (site, packages, model, tools):
+    for path in (site, packages, model, ocr_models, tools):
         if not path.exists():
             raise RuntimeError(f'缺少 Docker 常驻服务所需文件：{path}')
     custom = os.environ.get('TS_PLAMO_RUNNER')
@@ -65,7 +66,7 @@ def host_paths():
     else:
         runner = None
     return {'site': site.resolve(), 'packages': packages.resolve(), 'model': model.resolve(),
-            'tools': tools.resolve(), 'runner': runner}
+            'ocr': ocr_models.resolve(), 'tools': tools.resolve(), 'runner': runner}
 
 
 def build_image(instance):
@@ -125,6 +126,7 @@ def create_container(config, paths, *, gpu, is_rootless):
             '--mount', mount(paths['site'], '/deps'),
             '--mount', mount(paths['packages'], '/models/argos'),
             '--mount', mount(paths['model'], '/models/plamo.gguf'),
+            '--mount', mount(paths['ocr'], '/app/.runtime/data/ts/models/ocr'),
             '--mount', mount(paths['tools'], '/app/.runtime/tools'),
             '-e', 'ARGOS_PACKAGES_DIR=/models/argos',
             '-e', 'TS_PLAMO_MODEL=/models/plamo.gguf',
@@ -201,10 +203,12 @@ def wait_ready(config):
     last = None
     while time.monotonic() < deadline:
         try:
-            request(config, 'ping', timeout=3)
+            status = request(config, 'ping', timeout=3)
             result = request(config, 'translate', model=config['warm_model'],
                              text='The network is ready.', timeout=120)
-            if isinstance(result.get('text'), str) and result['text'].strip():
+            variant = MODELS[config['warm_model']].ocr_variant
+            if (variant in status.get('ocr_loaded', []) and isinstance(result.get('text'), str)
+                    and result['text'].strip()):
                 return
         except TsError as exc:
             last = exc
@@ -277,7 +281,7 @@ def existing_config():
     if not isinstance(data, dict) or not INSTANCE.fullmatch(str(data.get('instance', ''))):
         raise RuntimeError('现有常驻服务配置不属于本项目，未覆盖。')
     instance = data['instance']
-    if (data.get('protocol') != PROTOCOL or data.get('directory_owned') is not True
+    if (data.get('protocol') not in (1, PROTOCOL) or data.get('directory_owned') is not True
             or not CONTAINER_ID.fullmatch(str(data.get('container_id', '')))
             or data.get('container_name') != f'ts-resident-{os.getuid()}-{instance[:12]}'
             or data.get('image_tag') != f'ts-resident-{os.getuid()}:{instance}'

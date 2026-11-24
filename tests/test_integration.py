@@ -1,13 +1,13 @@
 import io
 import os
-import shutil
 import socket
 
 import pytest
 
 from ts.engine import ArgosEngine, Detector, local_packages
 from ts.errors import TsError
-from ts.inputs import ocr, run
+from ts.inputs import ocr
+from ts.ocr import available as ocr_available
 from ts.text import translate_text
 
 pytestmark = pytest.mark.integration
@@ -52,12 +52,11 @@ def test_real_argos_both_directions():
     assert 'API' in result and '`/tmp/a.py`' in result
 
 
-def test_real_ocr():
-    if not shutil.which('tesseract'):
-        unavailable('未安装 Tesseract')
-    langs = run(['tesseract', '--list-langs']).decode().split()
-    if not {'eng', 'chi_sim'}.issubset(langs):
-        unavailable('缺少 Tesseract eng+chi_sim')
+@pytest.mark.parametrize('variant', ['tiny', 'small'])
+def test_real_ocr(variant):
+    ready, reason = ocr_available(variant)
+    if not ready:
+        unavailable(reason)
     from PIL import Image, ImageDraw, ImageFont
     image = Image.new('RGB', (900, 130), 'white')
     font_path = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
@@ -66,15 +65,14 @@ def test_real_ocr():
     ImageDraw.Draw(image).text((20, 25), 'Hello world', font=ImageFont.truetype(font_path, 64), fill='black')
     data = io.BytesIO()
     image.save(data, format='PNG')
-    assert 'hello' in ocr(data.getvalue()).lower()
+    assert 'hello' in ocr(data.getvalue(), variant=variant).lower()
 
 
-def test_real_mixed_ocr_reaches_detector():
-    if not shutil.which('tesseract'):
-        unavailable('未安装 Tesseract')
-    langs = run(['tesseract', '--list-langs']).decode().split()
-    if not {'eng', 'chi_sim'}.issubset(langs):
-        unavailable('缺少 Tesseract eng+chi_sim')
+@pytest.mark.parametrize('variant', ['tiny', 'small'])
+def test_real_mixed_ocr_reaches_detector(variant):
+    ready, reason = ocr_available(variant)
+    if not ready:
+        unavailable(reason)
     font_path = '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc'
     if not os.path.isfile(font_path):
         unavailable('混合 OCR 样例缺少 NotoSansCJK 字体')
@@ -86,7 +84,7 @@ def test_real_mixed_ocr_reaches_detector():
     draw.text((25, 120), '这是中文测试', font=font, fill='black')
     data = io.BytesIO()
     image.save(data, format='PNG')
-    text = ocr(data.getvalue())
+    text = ocr(data.getvalue(), variant=variant)
     assert 'hello' in text.lower()
     assert '中文' in text.replace(' ', '')
     detected = []

@@ -1,4 +1,6 @@
 import importlib.util
+import json
+import os
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -141,6 +143,20 @@ def test_existing_unrelated_config_is_not_overwritten(monkeypatch, tmp_path):
     with pytest.raises(RuntimeError, match='未覆盖'):
         installer.existing_config()
     assert path.read_text() == contents
+
+
+def test_owned_legacy_service_config_can_be_replaced(monkeypatch, tmp_path):
+    instance = 'a' * 32
+    old = {'protocol': 1, 'root': str(tmp_path), 'instance': instance,
+           'directory_owned': True, 'container_id': 'b' * 64,
+           'container_name': f'ts-resident-{os.getuid()}-{instance[:12]}',
+           'image_tag': f'ts-resident-{os.getuid()}:{instance}',
+           'source_digest': 'c' * 64, 'host_bindings': {}}
+    path = tmp_path / 'resident.json'
+    path.write_text(json.dumps(old))
+    monkeypatch.setattr(installer, 'ROOT', tmp_path)
+    monkeypatch.setattr(installer, 'service_config_path', lambda: path)
+    assert installer.existing_config() == old
 
 
 def test_config_write_refuses_concurrent_changes(monkeypatch, tmp_path):
